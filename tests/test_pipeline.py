@@ -174,3 +174,56 @@ def test_word_table_rows_grouped() -> None:
     assert rows[0] == ["指标", "2024", "2025"]
     assert rows[1] == ["样本量", "1200", "1580"]
     assert rows[2] == ["准确率", "91.2%", "93.7%"]
+
+
+# --- docx 输出 ---
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_docx_uses_builtin_styles(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.docx_writer import render
+
+    out = tmp_path / "out.docx"
+    render(build_document(WORD), out)
+
+    doc = DocxDocument(str(out))
+    styles = [p.style.name for p in doc.paragraphs if p.text.strip()]
+    assert "Heading 1" in styles
+    assert styles.count("Heading 2") == 2
+    assert styles.count("List Bullet") == 3
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_docx_table_is_real_table(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.docx_writer import render
+
+    out = tmp_path / "out.docx"
+    render(build_document(WORD), out)
+
+    doc = DocxDocument(str(out))
+    assert len(doc.tables) == 1
+    table = doc.tables[0]
+    assert len(table.rows) == 3 and len(table.columns) == 3
+    assert table.cell(0, 0).text == "指标"
+    assert table.cell(2, 2).text == "93.7%"
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_docx_keeps_body_text(tmp_path: Path) -> None:
+    from docx import Document as DocxDocument
+
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.docx_writer import render
+
+    out = tmp_path / "out.docx"
+    render(build_document(WORD), out)
+
+    doc = DocxDocument(str(out))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "国内外学者对该问题已有大量研究" in text
+    assert "Last paragraph in English to verify spacing is preserved." in text
