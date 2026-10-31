@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>双栏样本</title>
+<style>
+  @page { size: A4; margin: 20mm; }
+  body { font-family: "Microsoft YaHei", serif; font-size: 10.5pt; line-height: 1.6; }
+  h1 { font-size: 18pt; column-span: all; margin-bottom: 1em; }
+  .cols { column-count: 2; column-gap: 8mm; }
+  .cols p { margin: 0 0 0.8em; text-align: justify; }
+</style>
+</head>
+<body>
+  <h1>双栏排版测试</h1>
+  <div class="cols">
+    <p>【左栏第一段】本研究关注电子版文档的结构还原问题。现有工具在处理多栏排版时，往往按纵向坐标排序，导致左右两栏的文本被交错拼接，输出结果无法阅读。</p>
+    <p>【左栏第二段】为解决这一问题，需要先做栏分割：通过检测页面内纵向的空白走廊，把内容划分为若干独立的栏，再在每栏内部做行聚类与段落合并。</p>
+    <p>【左栏第三段】栏分割的难点在于跨栏元素，例如通栏标题、跨栏图表说明、脚注，它们会打断空白走廊，导致一刀切的切分方式失败。</p>
+    <p>【右栏第一段】右栏的内容在纵向上与左栏平行，如果只按 y 坐标排序，就会得到“左一右一左二右二”这种交错结果，这是多栏文档转换失败最常见的原因。</p>
+    <p>【右栏第二段】工程上常用的做法是 XY-cut：递归地寻找横向和纵向的空白切分线，得到一个阅读顺序树，再按树的先序遍历输出内容。</p>
+    <p>【右栏第三段】实测发现，只要栏间留白稳定大于 6mm，投影法配合空白走廊检测的准确率就相当高，足以覆盖绝大多数期刊论文与双栏宣传页。</p>
+  </div>
+</body>
+</html>

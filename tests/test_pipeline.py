@@ -380,3 +380,44 @@ def test_xlsx_refuses_without_table(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="没有检测到表格"):
         render(build_document(CLEAN), tmp_path / "empty.xlsx")
+
+
+# --- 压测样本：双栏排版 / 跨页长表格 ---
+
+MULTI = ROOT / "fixtures" / "multicol.pdf"
+LONG = ROOT / "fixtures" / "long_table.pdf"
+
+
+@pytest.mark.skipif(not MULTI.exists(), reason="缺少 multicol.pdf")
+def test_multicol_reading_order() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(MULTI)
+    assert not any(b.kind == "table" for b in doc.blocks), "双栏正文被误判成表格"
+
+    paras = [b.text for b in doc.blocks if b.kind == "paragraph"]
+    left = [p for p in paras if p.startswith("【左栏")]
+    right = [p for p in paras if p.startswith("【右栏")]
+    assert len(left) == 3, left
+    assert len(right) == 3, right
+
+    # 阅读顺序：左栏全部读完再读右栏
+    idx_left_last = max(i for i, p in enumerate(paras) if p.startswith("【左栏"))
+    idx_right_first = min(i for i, p in enumerate(paras) if p.startswith("【右栏"))
+    assert idx_left_last < idx_right_first
+
+
+@pytest.mark.skipif(not LONG.exists(), reason="缺少 long_table.pdf")
+def test_cross_page_table_merged() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(LONG)
+    tables = [b for b in doc.blocks if b.kind == "table"]
+    assert len(tables) == 1, f"跨页表格被切成了 {len(tables)} 张"
+
+    rows = tables[0].rows
+    assert rows[0] == ["序号", "名称", "数量", "比例"]
+    assert sum(1 for r in rows if r[0] == "序号") == 1, "表头重复出现"
+    assert len(rows) == 46, f"应为表头 + 45 行，实际 {len(rows)}"
+    assert rows[-1][0] == "45"
+    assert rows[1][2] == "10"
