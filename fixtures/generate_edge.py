@@ -248,6 +248,66 @@ def e3_huge_font(out: Path) -> None:
     doc.save(str(out))
 
 
+def f1_deep_list(out: Path) -> None:
+    """四级嵌套列表。"""
+    doc = pymupdf.open()
+    p = _page(doc)
+    p.insert_text((60, 80), "四级列表测试", fontsize=16, fontname=CJK)
+    rows = [
+        (80, "• 一级：总体要求"),
+        (110, "◦ 二级：数据准备"),
+        (140, "▪ 三级：清洗规则"),
+        (170, "· 四级：缺失值处理"),
+        (140, "▪ 三级：校验规则"),
+        (110, "◦ 二级：模型训练"),
+        (80, "• 一级：交付标准"),
+    ]
+    y = 120.0
+    for x, text in rows:
+        p.insert_text((x, y), text, fontsize=11, fontname=CJK)
+        y += 18
+    doc.save(str(out))
+
+
+def f2_multilang(out: Path) -> None:
+    """中日韩俄混排（每种语言都用支持该字符集的字体，否则生成端就丢字）。"""
+    doc = pymupdf.open()
+    p = _page(doc)
+    p.insert_text((60, 80), "多语言混排测试", fontsize=16, fontname=CJK)
+
+    arial = r"C:\Windows\Fonts\arial.ttf"
+    lines = [
+        (CJK, "中文：本项目用于验证多语言混排的提取效果。"),
+        (CJK, "日本語：このプロジェクトは多言語の抽出を検証します。"),
+        ("korea", "한국어: 이 프로젝트는 다국어 추출을 검증합니다."),
+    ]
+    y = 120.0
+    for font, line in lines:
+        p.insert_text((60, y), line, fontsize=11, fontname=font)
+        y += 24
+
+    # 西里尔字母需要 Unicode 字体
+    p.insert_text((60, y), "Русский: Этот проект проверяет извлечение текста.",
+                  fontsize=11, fontname="Arial", fontfile=arial)
+    y += 24
+
+    p.insert_text((60, y), "混合：中文 + English + 日本語 + Русский 在一行里。",
+                  fontsize=11, fontname=CJK)
+    doc.save(str(out))
+
+
+def f3_vertical_text(out: Path) -> None:
+    """旋转 90 度的文字（模拟竖排/侧标签）。"""
+    doc = pymupdf.open()
+    p = _page(doc)
+    p.insert_text((60, 80), "竖排文字测试", fontsize=16, fontname=CJK)
+    p.insert_text((540, 120), "这是旋转了九十度的侧边文字", fontsize=11, fontname=CJK, rotate=90)
+    for i in range(4):
+        p.insert_text((60, 130 + i * 18), f"正文第 {i + 1} 行，旁边有一段旋转文字。",
+                      fontsize=11, fontname=CJK)
+    doc.save(str(out))
+
+
 def d1_corrupt(out: Path) -> None:
     doc = pymupdf.open()
     p = _page(doc)
@@ -283,6 +343,9 @@ def main() -> None:
         "e1_merged_cells": e1_merged_cells,
         "e2_multiline_cell": e2_multiline_cell,
         "e3_huge_font": e3_huge_font,
+        "f1_deep_list": f1_deep_list,
+        "f2_multilang": f2_multilang,
+        "f3_vertical_text": f3_vertical_text,
         "d1_corrupt": d1_corrupt,
         "d2_not_pdf": d2_not_pdf,
     }

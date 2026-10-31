@@ -27,6 +27,8 @@ def _render_block(block: Block) -> str:
         return "- " + block.text.lstrip("•·●○▪◦‣–—* ").strip()
     if block.kind == "code":
         return f"```\n{block.text}\n```"
+    if block.kind == "warning":
+        return f"> ⚠️ {block.text}"
     if block.kind == "table":
         return _render_table(block.rows or [])
     return block.text

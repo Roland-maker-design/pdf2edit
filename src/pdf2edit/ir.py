@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-Kind = Literal["heading", "paragraph", "list_item", "table", "code"]
+Kind = Literal["heading", "paragraph", "list_item", "table", "code", "warning"]
 
 BBox = tuple[float, float, float, float]
 

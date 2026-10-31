@@ -394,12 +394,14 @@ def build_document(pdf_path: str | Path) -> Document:
             para_gap = base_gap + body * 0.6 if small else body * 1.6
             rows = _group_rows(group)
             i = 0
+            warned_here = False
             while i < len(rows):
                 row = rows[i]
 
                 if len(row) >= 2 and any(_is_marker(ln.text) for ln in row):
                     flush_all()
                     ir.add(Block("list_item", text=_row_text(row), page=pno, **_geo(row)))
+                    warned_here = False
                     i += 1
                     continue
 
@@ -407,11 +409,16 @@ def build_document(pdf_path: str | Path) -> Document:
                     flush_all()
                     table, table_lines, i = _collect_table(rows, i)
                     _append_table(ir, table, pno, _geo(table_lines))
+                    warned_here = False
                     continue
 
                 if len(row) > 1:
                     # 多格行但不成表：拼起来，绝不丢单元格
                     flush_all()
+                    if _is_short_cell_row(row) and not warned_here:
+                        # 静默降级比报错更糟：这里是"看起来像表格却没成形"
+                        ir.add(Block("warning", text="疑似表格未能识别，下方内容可能需要人工整理"))
+                        warned_here = True
                     ir.add(Block("paragraph", text=_row_text(row), page=pno, **_geo(row)))
                     i += 1
                     continue

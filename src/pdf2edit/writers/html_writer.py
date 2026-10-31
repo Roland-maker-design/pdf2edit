@@ -26,6 +26,7 @@ li { margin: 0.25em 0; }
 table { border-collapse: collapse; margin: 1.2em 0; width: 100%; }
 th, td { border: 1px solid #8884; padding: 0.45em 0.7em; text-align: left; }
 th { background: #8881; font-weight: 600; }
+.warn { color: #b45309; background: #f59e0b1a; border-left: 3px solid #f59e0b; padding: 0.5em 0.8em; }
 """
 
 
@@ -54,6 +55,8 @@ def _block_html(block: Block) -> str:
         return _table_html(block.rows or [])
     if block.kind == "code":
         return f"<pre><code>{escape(block.text)}</code></pre>"
+    if block.kind == "warning":
+        return f'<p class="warn">⚠️ {escape(block.text)}</p>'
     if block.kind == "list_item":
         return escape(block.text.lstrip("•·●○▪◦‣–—* ").strip())
     return f"<p>{escape(block.text)}</p>"

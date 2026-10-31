@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from pptx import Presentation
+from pptx.dml.color import RGBColor
 from pptx.util import Pt
 
 from ..ir import Block, Document
@@ -37,9 +38,11 @@ def _textbox(slide, block: Block, left: float, top: float, width: float, height:
     for para in frame.paragraphs:
         for run in para.runs:
             run.font.size = Pt(min(size, 12.0) if block.kind == "code" else size)
-            run.font.bold = block.kind == "heading"
+            run.font.bold = block.kind in ("heading", "warning")
             if block.kind == "code":
                 run.font.name = "Courier New"
+            if block.kind == "warning":
+                run.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
     return box
 
 

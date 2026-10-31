@@ -77,8 +77,13 @@ def convert_file(src: Path, outdir: Path, formats: list[str]) -> dict:
         except ValueError as exc:
             skipped.append(f"{FORMAT_LABELS.get(fmt, fmt)} 已跳过：{exc}")
 
+    suspicious = sum(1 for b in ir.blocks if b.kind == "warning")
+    if suspicious:
+        skipped.append(f"另有 {suspicious} 处结构可疑，已在输出里标注")
+
     return {
         "ok": bool(produced),
         "reason": "；".join(skipped),
         "files": produced,
+        "warnings": suspicious,
     }

@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx import Document as DocxDocument
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
 
 from ..ir import Document
 
@@ -25,6 +25,11 @@ def render(ir: Document, out_path: str | Path) -> Path:
         if block.kind == "heading":
             level = max(1, min(6, block.level or 1))
             doc.add_heading(block.text, level=level)
+        elif block.kind == "warning":
+            para = doc.add_paragraph()
+            run = para.add_run("⚠️ " + block.text)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
         elif block.kind == "list_item":
             doc.add_paragraph(block.text, style="List Bullet")
         elif block.kind == "code":

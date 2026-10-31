@@ -583,6 +583,20 @@ def test_non_pdf_is_rejected_not_crashed(tmp_path: Path) -> None:
     assert "有效的 PDF" in result["reason"]
 
 
+def test_scattered_table_emits_warning(tmp_path: Path) -> None:
+    """表格散架时必须留下标记，不能静默降级。"""
+    pdf = EDGE / "e2_multiline_cell.pdf"
+    if not pdf.exists():
+        pytest.skip("缺少 e2_multiline_cell.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(pdf, tmp_path, ["md"])
+    text = result["files"][0].read_text(encoding="utf-8")
+    assert "⚠️" in text, "输出里没有提示标记"
+    assert "疑似表格" in text
+    assert result["warnings"] >= 1
+
+
 def test_all_fixtures_never_raise(tmp_path: Path) -> None:
     """所有样本跑一遍 Markdown，只允许"成功"或"明确拒绝"，不允许抛异常。"""
     from pdf2edit.convert import convert_file
