@@ -52,6 +52,8 @@ def _block_html(block: Block) -> str:
         return f"<h{level}>{escape(block.text)}</h{level}>"
     if block.kind == "table":
         return _table_html(block.rows or [])
+    if block.kind == "code":
+        return f"<pre><code>{escape(block.text)}</code></pre>"
     if block.kind == "list_item":
         return escape(block.text.lstrip("•·●○▪◦‣–—* ").strip())
     return f"<p>{escape(block.text)}</p>"

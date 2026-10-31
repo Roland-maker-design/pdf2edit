@@ -31,6 +31,9 @@ GAP_MIN_WIDTH_RATIO = 0.015   # 栏间空白至少占页宽 1.5%（三栏排版�
 GAP_MAX_LINE_RATIO = 0.15     # 越过该空白的行数低于 15% 才算"走廊"
 CELL_SHORT_CHARS = 12         # 单元格文本中位数不超过此值，才像表格而非分栏正文
 MARGIN_BAND_RATIO = 0.07      # 页眉/页脚判定带
+HEADING_MIN_RATIO = 1.12      # 标题至少要这么大倍数
+HEADING_MIN_DELTA = 1.5       # 且至少大这么多 pt（防止 10→11 被当成标题）
+MONO_HINTS = ("cour", "mono", "consol", "menlo", "courier", "code")
 
 
 def _is_cjk(ch: str) -> bool:
@@ -78,8 +81,20 @@ def _body_left(lines: list[Line], body: float) -> float:
 
 
 def _heading_levels(lines: list[Line], body: float) -> dict[float, int]:
-    sizes = sorted({round(ln.size, 1) for ln in lines if ln.size > body * 1.05}, reverse=True)
+    sizes = sorted(
+        {
+            round(ln.size, 1)
+            for ln in lines
+            if ln.size >= body * HEADING_MIN_RATIO and ln.size - body >= HEADING_MIN_DELTA
+        },
+        reverse=True,
+    )
     return {s: i + 1 for i, s in enumerate(sizes[:6])}
+
+
+def _is_mono(font: str) -> bool:
+    lowered = font.lower()
+    return any(hint in lowered for hint in MONO_HINTS)
 
 
 def _is_footer(ln: Line) -> bool:
@@ -104,6 +119,8 @@ def _is_short_cell_row(row: list[Line]) -> bool:
 
 
 def _classify(ln: Line, body: float, body_left: float, levels: dict[float, int]) -> tuple[str, int]:
+    if _is_mono(ln.font):
+        return "code", 0
     level = levels.get(round(ln.size, 1))
     if level:
         return "heading", level
@@ -345,6 +362,25 @@ def build_document(pdf_path: str | Path) -> Document:
         ir.add(Block("paragraph", text=text, page=cur.page, **_geo(acc)))
         buf.clear()
 
+    code_buf: list[Line] = []
+
+    def flush_code() -> None:
+        if not code_buf:
+            return
+        ir.add(
+            Block(
+                "code",
+                text="\n".join(l.raw for l in code_buf),
+                page=code_buf[0].page,
+                **_geo(code_buf),
+            )
+        )
+        code_buf.clear()
+
+    def flush_all() -> None:
+        flush()
+        flush_code()
+
     for pno in sorted(pages):
         page_lines = pages[pno]
         page_width = page_lines[0].page_width
@@ -362,20 +398,20 @@ def build_document(pdf_path: str | Path) -> Document:
                 row = rows[i]
 
                 if len(row) >= 2 and any(_is_marker(ln.text) for ln in row):
-                    flush()
+                    flush_all()
                     ir.add(Block("list_item", text=_row_text(row), page=pno, **_geo(row)))
                     i += 1
                     continue
 
                 if _looks_like_table(rows, i):
-                    flush()
+                    flush_all()
                     table, table_lines, i = _collect_table(rows, i)
                     _append_table(ir, table, pno, _geo(table_lines))
                     continue
 
                 if len(row) > 1:
                     # 多格行但不成表：拼起来，绝不丢单元格
-                    flush()
+                    flush_all()
                     ir.add(Block("paragraph", text=_row_text(row), page=pno, **_geo(row)))
                     i += 1
                     continue
@@ -385,11 +421,15 @@ def build_document(pdf_path: str | Path) -> Document:
                 if _is_footer(ln) or _is_margin_noise(ln, body):
                     continue
                 kind, level = _classify(ln, body, group_left, levels)
-                if kind == "paragraph":
+                if kind == "code":
+                    flush()
+                    code_buf.append(ln)
+                elif kind == "paragraph":
+                    flush_code()
                     buf.append(ln)
                 else:
-                    flush()
+                    flush_all()
                     ir.add(Block(kind, text=ln.text, level=level, page=pno, **_geo([ln])))
-            flush()
+            flush_all()
     flush()
     return ir

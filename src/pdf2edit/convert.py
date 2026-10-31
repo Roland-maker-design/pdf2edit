@@ -50,7 +50,14 @@ def convert_file(src: Path, outdir: Path, formats: list[str]) -> dict:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    doc = pymupdf.open(str(src))
+    try:
+        doc = pymupdf.open(str(src))
+    except Exception:  # noqa: BLE001 - 非 PDF / 损坏文件要给友好提示而不是抛栈
+        return {"ok": False, "reason": "这不是一个有效的 PDF 文件", "files": []}
+
+    if doc.page_count == 0:
+        return {"ok": False, "reason": "PDF 里没有页面", "files": []}
+
     report = assess(doc)
     if not report.ok:
         return {"ok": False, "reason": report.reason, "files": []}

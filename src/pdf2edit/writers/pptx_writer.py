@@ -27,12 +27,19 @@ def _textbox(slide, block: Block, left: float, top: float, width: float, height:
     frame.margin_right = 0
     frame.margin_top = 0
     frame.margin_bottom = 0
-    para = frame.paragraphs[0]
-    para.text = block.text
+
+    lines = block.text.split("\n")
+    frame.paragraphs[0].text = lines[0]
+    for line in lines[1:]:
+        frame.add_paragraph().text = line
+
     size = block.size or 11.0
-    for run in para.runs:
-        run.font.size = Pt(size)
-        run.font.bold = block.kind == "heading"
+    for para in frame.paragraphs:
+        for run in para.runs:
+            run.font.size = Pt(min(size, 12.0) if block.kind == "code" else size)
+            run.font.bold = block.kind == "heading"
+            if block.kind == "code":
+                run.font.name = "Courier New"
     return box
 
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx import Document as DocxDocument
+from docx.shared import Pt
 
 from ..ir import Document
 
@@ -26,6 +27,15 @@ def render(ir: Document, out_path: str | Path) -> Path:
             doc.add_heading(block.text, level=level)
         elif block.kind == "list_item":
             doc.add_paragraph(block.text, style="List Bullet")
+        elif block.kind == "code":
+            para = doc.add_paragraph()
+            lines = block.text.split("\n")
+            for idx, line in enumerate(lines):
+                run = para.add_run(line)
+                run.font.name = "Courier New"
+                run.font.size = Pt(9)
+                if idx < len(lines) - 1:
+                    run.add_break()
         elif block.kind == "table":
             rows = block.rows or []
             if not rows:

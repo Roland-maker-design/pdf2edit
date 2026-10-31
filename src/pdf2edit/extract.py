@@ -12,7 +12,7 @@ import pymupdf
 
 @dataclass
 class Line:
-    text: str
+    text: str                            # 去掉首尾空白，供分类/合并使用
     bbox: tuple[float, float, float, float]
     size: float
     font: str
@@ -20,6 +20,7 @@ class Line:
     page: int
     page_height: float
     page_width: float
+    raw: str = ""                        # 原始文本，保留行首缩进（代码块需要）
 
 
 def extract_lines(doc: pymupdf.Document) -> list[Line]:
@@ -52,6 +53,7 @@ def extract_lines(doc: pymupdf.Document) -> list[Line]:
                         page=pno,
                         page_height=page.rect.height,
                         page_width=page.rect.width,
+                        raw=text.rstrip("\n"),
                     )
                 )
     return lines

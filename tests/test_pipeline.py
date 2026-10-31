@@ -552,3 +552,47 @@ def test_convert_file_skips_xlsx_without_table(tmp_path: Path) -> None:
     assert result["ok"] is True, "至少 md 该成功"
     assert len(result["files"]) == 1
     assert "Excel" in result["reason"], result["reason"]
+
+
+# --- 边界样本 ---
+
+EDGE = ROOT / "fixtures" / "edge"
+
+
+def test_code_block_rendered_as_fence(tmp_path: Path) -> None:
+    pdf = EDGE / "a3_code_block.pdf"
+    if not pdf.exists():
+        pytest.skip("缺少 a3_code_block.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(pdf, tmp_path, ["md"])
+    text = result["files"][0].read_text(encoding="utf-8")
+    assert "```" in text
+    assert '    print(f"hi {name}")' in text, "代码缩进丢失"
+    assert "## 下面是一段代码" not in text, "正文被误判成标题"
+
+
+def test_non_pdf_is_rejected_not_crashed(tmp_path: Path) -> None:
+    pdf = EDGE / "d2_not_pdf.pdf"
+    if not pdf.exists():
+        pytest.skip("缺少 d2_not_pdf.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(pdf, tmp_path, ["md"])
+    assert result["ok"] is False
+    assert "有效的 PDF" in result["reason"]
+
+
+def test_all_fixtures_never_raise(tmp_path: Path) -> None:
+    """所有样本跑一遍 Markdown，只允许"成功"或"明确拒绝"，不允许抛异常。"""
+    from pdf2edit.convert import convert_file
+
+    pdfs = sorted(ROOT.joinpath("fixtures").rglob("*.pdf"))
+    assert pdfs, "没有找到任何样本"
+    for pdf in pdfs:
+        result = convert_file(pdf, tmp_path / pdf.stem, ["md"])
+        assert "ok" in result and "reason" in result, pdf.name
+        if not result["ok"]:
+            assert result["reason"], f"{pdf.name} 被拒绝但没给理由"
+        else:
+            assert result["files"] and result["files"][0].exists(), pdf.name
