@@ -26,8 +26,16 @@
 ```bash
 python -m pdf2edit 输入.pdf                 # 默认输出 Markdown
 python -m pdf2edit 输入.pdf --to docx -o 输出.docx
+python -m pdf2edit --window                 # 桌面窗口
+python -m pdf2edit --ui                     # 本地网页（127.0.0.1）
 python tools/probe_pdf.py 输入.pdf          # 先体检，看这份能不能转
 ```
+
+桌面窗口长这样：
+
+![桌面界面](docs/images/ui-window.png)
+
+两种界面共用同一条转换流水线（`src/pdf2edit/convert.py`）。拖入 PDF、勾格式、点一下，结果落在输出目录。全部在本机完成，不联网。
 
 文字层不可信的文件会被明确拒绝并说明原因，不会硬转出乱码。
 
@@ -44,7 +52,7 @@ tools/          辅助脚本
 ## 开发
 
 ```bash
-python -m pip install pymupdf fonttools python-docx pytest
+python -m pip install pymupdf fonttools python-docx python-pptx openpyxl flask pyside6 pytest
 python -m pytest tests -q
 ```
 

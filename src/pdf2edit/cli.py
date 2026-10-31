@@ -1,4 +1,8 @@
-"""命令行入口：python -m pdf2edit <pdf> --to md|docx|html|pptx|xlsx [-o 输出路径]"""
+"""命令行入口。
+
+    python -m pdf2edit <pdf> --to md|docx|html|pptx|xlsx [-o 输出路径]
+    python -m pdf2edit --ui [--port 8765]
+"""
 
 from __future__ import annotations
 
@@ -17,10 +21,30 @@ _EXT = {"md": ".md", "docx": ".docx", "html": ".html", "pptx": ".pptx", "xlsx": 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="pdf2edit", description="把电子版 PDF 转成可编辑格式")
-    ap.add_argument("pdf", help="输入 PDF 路径")
+    ap.add_argument("pdf", nargs="?", help="输入 PDF 路径")
     ap.add_argument("--to", default="md", choices=list(_EXT), help="目标格式")
     ap.add_argument("-o", "--out", help="输出文件路径（默认与输入同名）")
+    ap.add_argument("--ui", action="store_true", help="启动本地网页界面")
+    ap.add_argument("--window", action="store_true", help="启动桌面窗口界面")
+    ap.add_argument("--port", type=int, default=8765, help="网页界面端口")
+    ap.add_argument("--host", default="127.0.0.1", help="监听地址（默认只监听本机）")
     args = ap.parse_args(argv)
+
+    if args.window:
+        from .desktop import run as run_desktop
+
+        run_desktop()
+        return 0
+
+    if args.ui:
+        from .ui import run
+
+        run(host=args.host, port=args.port)
+        return 0
+
+    if not args.pdf:
+        ap.print_help()
+        return 2
 
     src = Path(args.pdf)
     if not src.exists():

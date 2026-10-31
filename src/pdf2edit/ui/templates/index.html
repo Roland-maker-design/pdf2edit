@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pdf2edit — 本地 PDF 转换</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --accent: #3b82f6; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 3rem 1.2rem 5rem;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    line-height: 1.7; color: #222; background: #fbfbfd;
+  }
+  .wrap { max-width: 44rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .3rem; }
+  .tagline { color: #888; margin: 0 0 2rem; font-size: .95rem; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 1.4rem; background: #fff; }
+  #drop {
+    border: 2px dashed var(--line); border-radius: 10px;
+    padding: 2.4rem 1rem; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #drop.hover { border-color: var(--accent); background: #3b82f60d; }
+  #drop strong { display: block; margin-bottom: .35rem; }
+  #drop small { color: #888; }
+  #filelist { margin-top: .8rem; font-size: .9rem; color: #666; word-break: break-all; }
+  .formats { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; margin: 1.2rem 0; }
+  .formats label { display: flex; align-items: center; gap: .35rem; font-size: .95rem; }
+  button {
+    font: inherit; padding: .6rem 1.4rem; border-radius: 8px; border: none;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .results { margin-top: 1.6rem; display: grid; gap: .7rem; }
+  .item { border: 1px solid var(--line); border-radius: 10px; padding: .8rem 1rem; background: #fff; }
+  .item .name { font-weight: 600; }
+  .item .ok { color: #16a34a; }
+  .item .bad { color: #dc2626; }
+  .item .reason { color: #888; font-size: .88rem; margin-top: .2rem; }
+  .item a { display: inline-block; margin-right: .8rem; color: var(--accent); }
+  .error { color: #dc2626; margin-top: 1rem; }
+  footer { margin-top: 2.5rem; color: #888; font-size: .85rem; }
+
+  /* 深色覆写必须放在最后，否则会被上面的基础样式覆盖 */
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e6e6; background: #16181c; }
+    .card, .item { background: #1e2126; border-color: #ffffff1f; }
+    .item .reason, footer, .tagline, #filelist { color: #9aa0a6; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>pdf2edit</h1>
+  <p class="tagline">把 PDF 转成能改的东西 · 全部在本机完成，文件不出这台机器</p>
+
+  <form class="card" method="post" action="/convert" enctype="multipart/form-data" id="form">
+    <div id="drop">
+      <strong>把 PDF 拖进来</strong>
+      <small>或者点这里选择文件（可以多选）</small>
+      <input type="file" name="files" id="files" accept="application/pdf" multiple hidden>
+    </div>
+    <div id="filelist"></div>
+
+    <div class="formats">
+      {% for key, label in formats.items() %}
+        <label><input type="checkbox" name="formats" value="{{ key }}" {% if key in ('md', 'docx') %}checked{% endif %}> {{ label }}</label>
+      {% endfor %}
+    </div>
+
+    <button type="submit" id="submit">开始转换</button>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  </form>
+
+  {% if results is not none %}
+  <div class="results">
+    {% for r in results %}
+      <div class="item">
+        <div class="name">
+          {{ r.name }}
+          {% if r.ok %}<span class="ok"> · 转换完成</span>{% else %}<span class="bad"> · 未转换</span>{% endif %}
+        </div>
+        {% if r.reason %}<div class="reason">{{ r.reason }}</div>{% endif %}
+        {% for f in r.files %}
+          <a href="{{ url_for('download', job=r.job, name=f.name) }}">下载 {{ f.name }}</a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <footer>
+    支持电子版 PDF（Word 导出、LaTeX、浏览器打印等）。扫描件会被拒绝并说明原因。<br>
+    图片不处理；公式和多栏页里嵌表格当前不支持。
+  </footer>
+</div>
+
+<script>
+  const drop = document.getElementById('drop');
+  const input = document.getElementById('files');
+  const filelist = document.getElementById('filelist');
+  const form = document.getElementById('form');
+  const submit = document.getElementById('submit');
+
+  function renderNames() {
+    const names = Array.from(input.files || []).map(f => f.name);
+    filelist.textContent = names.length ? names.join('、') : '';
+  }
+
+  drop.addEventListener('click', () => input.click());
+  input.addEventListener('change', renderNames);
+
+  ['dragenter', 'dragover'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hover'); }));
+  ['dragleave', 'drop'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hover'); }));
+
+  drop.addEventListener('drop', e => {
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      renderNames();
+    }
+  });
+
+  form.addEventListener('submit', () => {
+    submit.disabled = true;
+    submit.textContent = '转换中…';
+  });
+</script>
+</body>
+</html>

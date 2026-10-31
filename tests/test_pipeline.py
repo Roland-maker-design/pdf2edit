@@ -468,3 +468,87 @@ def test_footnotes_kept_separate() -> None:
     assert body, "正文丢失"
     assert notes, "脚注丢失"
     assert "参见某文献" not in "".join(body), "脚注被并进了正文"
+
+
+# --- 本地网页 UI ---
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_ui_converts_uploaded_file(tmp_path: Path) -> None:
+    from pdf2edit.ui.app import create_app
+
+    app = create_app(tmp_path)
+    client = app.test_client()
+    data = {
+        "files": [(WORD.open("rb"), "word_export.pdf")],
+        "formats": ["md", "docx"],
+    }
+    resp = client.post("/convert", data=data, content_type="multipart/form-data")
+    body = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert "转换完成" in body
+    assert ".md" in body and ".docx" in body
+
+
+def test_ui_rejects_broken_text_layer(tmp_path: Path) -> None:
+    if not BROKEN.exists():
+        pytest.skip("缺少坏样本")
+    from pdf2edit.ui.app import create_app
+
+    app = create_app(tmp_path)
+    client = app.test_client()
+    data = {"files": [(BROKEN.open("rb"), "broken.pdf")], "formats": ["md"]}
+    resp = client.post("/convert", data=data, content_type="multipart/form-data")
+    body = resp.get_data(as_text=True)
+
+    assert resp.status_code == 200
+    assert "未转换" in body
+    assert "文字层" in body
+
+
+def test_ui_reports_skipped_xlsx(tmp_path: Path) -> None:
+    """没有表格的文档转 Excel：界面要说明原因，而不是假装成功。"""
+    if not CLEAN.exists():
+        pytest.skip("缺少 clean_basic.pdf")
+    from pdf2edit.ui.app import create_app
+
+    app = create_app(tmp_path)
+    client = app.test_client()
+    data = {"files": [(CLEAN.open("rb"), "clean.pdf")], "formats": ["xlsx"]}
+    resp = client.post("/convert", data=data, content_type="multipart/form-data")
+    body = resp.get_data(as_text=True)
+
+    assert "没有检测到表格" in body
+
+
+# --- 共享转换流水线（桌面窗口和网页共用） ---
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_convert_file_produces_outputs(tmp_path: Path) -> None:
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(WORD, tmp_path, ["md", "docx", "html"])
+    assert result["ok"] is True
+    assert len(result["files"]) == 3
+    assert all(p.exists() and p.stat().st_size > 0 for p in result["files"])
+
+
+def test_convert_file_rejects_broken(tmp_path: Path) -> None:
+    if not BROKEN.exists():
+        pytest.skip("缺少坏样本")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(BROKEN, tmp_path, ["md"])
+    assert result["ok"] is False
+    assert "文字层" in result["reason"]
+
+
+def test_convert_file_skips_xlsx_without_table(tmp_path: Path) -> None:
+    if not CLEAN.exists():
+        pytest.skip("缺少 clean_basic.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(CLEAN, tmp_path, ["md", "xlsx"])
+    assert result["ok"] is True, "至少 md 该成功"
+    assert len(result["files"]) == 1
+    assert "Excel" in result["reason"], result["reason"]
