@@ -335,3 +335,48 @@ def test_pptx_degrades_without_geometry(tmp_path: Path) -> None:
     prs = Presentation(str(out))
     assert len(prs.slides) == 1
     assert len(prs.slides[0].shapes) == 2
+
+
+# --- xlsx 输出 ---
+
+def test_coerce_numbers_and_percent() -> None:
+    from pdf2edit.writers.xlsx_writer import coerce
+
+    assert coerce("1200") == (1200, "0")
+    assert coerce("91.2%") == (0.912, "0.0%")
+    assert coerce("1,200") == (1200.0, "#,##0.00")
+    assert coerce("3.14") == (3.14, "0.00")
+    assert coerce("准确率") == ("准确率", None)
+    assert coerce("") == (None, None)
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_xlsx_real_numbers(tmp_path: Path) -> None:
+    from openpyxl import load_workbook
+
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.xlsx_writer import render
+
+    out = tmp_path / "out.xlsx"
+    render(build_document(WORD), out)
+
+    wb = load_workbook(str(out))
+    assert wb.sheetnames == ["表1"]
+    ws = wb["表1"]
+
+    assert ws["A1"].value == "指标"
+    assert ws["B2"].value == 1200 and isinstance(ws["B2"].value, int)
+    assert abs(ws["B3"].value - 0.912) < 1e-9
+    assert abs(ws["C3"].value - 0.937) < 1e-9
+    assert isinstance(ws["B3"].value, float)
+    assert "%" in (ws["B3"].number_format or "")
+    assert ws.freeze_panes == "A2"
+
+
+@pytest.mark.skipif(not CLEAN.exists(), reason="缺少 clean_basic.pdf")
+def test_xlsx_refuses_without_table(tmp_path: Path) -> None:
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.xlsx_writer import render
+
+    with pytest.raises(ValueError, match="没有检测到表格"):
+        render(build_document(CLEAN), tmp_path / "empty.xlsx")

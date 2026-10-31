@@ -1,4 +1,4 @@
-"""命令行入口：python -m pdf2edit <pdf> --to md|docx|html|pptx [-o 输出路径]"""
+"""命令行入口：python -m pdf2edit <pdf> --to md|docx|html|pptx|xlsx [-o 输出路径]"""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ import pymupdf
 
 from .quality import assess
 from .structure import build_document
-from .writers import docx_writer, html_writer, markdown, pptx_writer
+from .writers import docx_writer, html_writer, markdown, pptx_writer, xlsx_writer
 
-_EXT = {"md": ".md", "docx": ".docx", "html": ".html", "pptx": ".pptx"}
+_EXT = {"md": ".md", "docx": ".docx", "html": ".html", "pptx": ".pptx", "xlsx": ".xlsx"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -40,6 +40,12 @@ def main(argv: list[str] | None = None) -> int:
         docx_writer.render(ir, out)
     elif args.to == "pptx":
         pptx_writer.render(ir, out)
+    elif args.to == "xlsx":
+        try:
+            xlsx_writer.render(ir, out)
+        except ValueError as exc:
+            print(f"拒绝转换：{exc}", file=sys.stderr)
+            return 1
     elif args.to == "html":
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(html_writer.render(ir), encoding="utf-8")
