@@ -134,3 +134,43 @@ def test_table_rendered_as_pipe_table() -> None:
     md = render(build_document(PRINTED))
     assert "| 指标 | 2024 | 2025 |" in md
     assert "| 准确率 | 91.2% | 93.7% |" in md
+
+
+# --- Word 导出的真实 PDF（H1/H2 只差 1pt，项目符号是独立一段，表格基线差 2.5pt） ---
+
+WORD = ROOT / "fixtures" / "word_export.pdf"
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_word_heading_levels_by_size_rank() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(WORD)
+    h1 = [b for b in doc.blocks if b.kind == "heading" and b.level == 1]
+    h2 = [b for b in doc.blocks if b.kind == "heading" and b.level == 2]
+    assert [b.text for b in h1] == ["第一章 绪论"]
+    assert [b.text for b in h2] == ["1.1 研究背景", "1.2 主要数据"]
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_word_bullet_marker_not_a_table() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(WORD)
+    items = [b for b in doc.blocks if b.kind == "list_item"]
+    assert len(items) == 3
+    assert items[0].text.startswith("第一")
+    assert not any(b.kind == "table" and any("•" in c for r in (b.rows or []) for c in r) for b in doc.blocks)
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_word_table_rows_grouped() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(WORD)
+    tables = [b for b in doc.blocks if b.kind == "table"]
+    assert len(tables) == 1
+    rows = tables[0].rows
+    assert rows[0] == ["指标", "2024", "2025"]
+    assert rows[1] == ["样本量", "1200", "1580"]
+    assert rows[2] == ["准确率", "91.2%", "93.7%"]
