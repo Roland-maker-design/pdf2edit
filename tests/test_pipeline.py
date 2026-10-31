@@ -89,3 +89,48 @@ def test_markdown_rendering(clean_pdf: Path) -> None:
     assert md.startswith("# 第一章 总论")
     assert "- 第一条要点\n- 第二条要点" in md
     assert "## 1.1 背景" in md
+
+
+# --- 浏览器打印的真实 PDF（列表无项目符号、含表格） ---
+
+PRINTED = ROOT / "fixtures" / "print_export.pdf"
+
+
+@pytest.mark.skipif(not PRINTED.exists(), reason="缺少 print_export.pdf")
+def test_lists_detected_by_indent() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(PRINTED)
+    items = [b for b in doc.blocks if b.kind == "list_item"]
+    assert len(items) == 3, [b.text for b in items]
+    assert items[0].text.startswith("第一")
+
+
+@pytest.mark.skipif(not PRINTED.exists(), reason="缺少 print_export.pdf")
+def test_table_detected() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(PRINTED)
+    tables = [b for b in doc.blocks if b.kind == "table"]
+    assert len(tables) == 1
+    rows = tables[0].rows
+    assert rows[0] == ["指标", "2024", "2025"]
+    assert rows[2] == ["准确率", "91.2%", "93.7%"]
+
+
+@pytest.mark.skipif(not PRINTED.exists(), reason="缺少 print_export.pdf")
+def test_percentage_not_treated_as_list() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(PRINTED)
+    assert not any(b.kind == "list_item" and "%" in b.text for b in doc.blocks)
+
+
+@pytest.mark.skipif(not PRINTED.exists(), reason="缺少 print_export.pdf")
+def test_table_rendered_as_pipe_table() -> None:
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.markdown import render
+
+    md = render(build_document(PRINTED))
+    assert "| 指标 | 2024 | 2025 |" in md
+    assert "| 准确率 | 91.2% | 93.7% |" in md
