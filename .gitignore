@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 输出产物
+out/
+*.out.md
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地实验（不提交）
+scratch/
+*.local.*
