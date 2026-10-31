@@ -35,7 +35,10 @@ def _textbox(slide, block: Block, left: float, top: float, width: float, height:
         frame.add_paragraph().text = line
 
     size = block.size or 11.0
+    depth = max(0, min(4, (block.level or 1) - 1)) if block.kind == "list_item" else 0
     for para in frame.paragraphs:
+        if block.kind == "list_item":
+            para.level = depth
         for run in para.runs:
             run.font.size = Pt(min(size, 12.0) if block.kind == "code" else size)
             run.font.bold = block.kind in ("heading", "warning")

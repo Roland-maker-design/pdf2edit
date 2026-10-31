@@ -24,7 +24,8 @@ def _render_block(block: Block) -> str:
         level = max(1, min(6, block.level or 1))
         return "#" * level + " " + block.text
     if block.kind == "list_item":
-        return "- " + block.text.lstrip("•·●○▪◦‣–—* ").strip()
+        body = block.text.lstrip("•·●○▪◦‣–—* ").strip()
+        return "  " * max(0, (block.level or 1) - 1) + "- " + body
     if block.kind == "code":
         return f"```\n{block.text}\n```"
     if block.kind == "warning":

@@ -583,6 +583,29 @@ def test_non_pdf_is_rejected_not_crashed(tmp_path: Path) -> None:
     assert "有效的 PDF" in result["reason"]
 
 
+def test_list_levels_preserved(tmp_path: Path) -> None:
+    """四级列表要保留层级，且不能残留项目符号字符。"""
+    pdf = EDGE / "f1_deep_list.pdf"
+    if not pdf.exists():
+        pytest.skip("缺少 f1_deep_list.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(pdf, tmp_path, ["md", "docx"])
+    md = next(p for p in result["files"] if p.suffix == ".md").read_text(encoding="utf-8")
+
+    assert "- 一级：总体要求" in md
+    assert "  - 二级：数据准备" in md
+    assert "    - 三级：清洗规则" in md
+    assert "      - 四级：缺失值处理" in md
+    assert "•" not in md and "·" not in md, "项目符号没有被清掉"
+
+    from docx import Document as DocxDocument
+
+    doc = DocxDocument(str(next(p for p in result["files"] if p.suffix == ".docx")))
+    styles = [p.style.name for p in doc.paragraphs if p.text.strip()]
+    assert "List Bullet" in styles and "List Bullet 2" in styles
+
+
 def test_scattered_table_emits_warning(tmp_path: Path) -> None:
     """表格散架时必须留下标记，不能静默降级。"""
     pdf = EDGE / "e2_multiline_cell.pdf"

@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx import Document as DocxDocument
-from docx.shared import Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
 
 from ..ir import Document
 
@@ -31,7 +31,10 @@ def render(ir: Document, out_path: str | Path) -> Path:
             run.font.bold = True
             run.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
         elif block.kind == "list_item":
-            doc.add_paragraph(block.text, style="List Bullet")
+            level = max(1, min(3, block.level or 1))
+            style = "List Bullet" if level == 1 else f"List Bullet {level}"
+            para = doc.add_paragraph(block.text, style=style)
+            para.paragraph_format.left_indent = Inches(0.25 * (level - 1))
         elif block.kind == "code":
             para = doc.add_paragraph()
             lines = block.text.split("\n")

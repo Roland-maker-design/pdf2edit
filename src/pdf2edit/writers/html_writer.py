@@ -64,18 +64,37 @@ def _block_html(block: Block) -> str:
 
 def render(ir: Document, title: str | None = None) -> str:
     parts: list[str] = []
-    list_buf: list[str] = []
+    list_buf: list[Block] = []
 
     def flush_list() -> None:
         if not list_buf:
             return
-        items = "\n".join(f"  <li>{t}</li>" for t in list_buf)
-        parts.append(f"<ul>\n{items}\n</ul>")
+
+        # 先按层级建树，再递归渲染——直接拼字符串很容易把 <ul> 放错位置
+        root: list[dict] = []
+        stack: list[tuple[int, list[dict]]] = [(0, root)]
+        for block in list_buf:
+            level = max(1, min(6, block.level or 1))
+            while len(stack) > 1 and stack[-1][0] >= level:
+                stack.pop()
+            node = {"text": block.text.lstrip("•·●○▪◦‣–—* ").strip(), "children": []}
+            stack[-1][1].append(node)
+            stack.append((level, node["children"]))
+
+        def emit(nodes: list[dict]) -> str:
+            out = ["<ul>"]
+            for node in nodes:
+                inner = "\n" + emit(node["children"]) if node["children"] else ""
+                out.append(f"<li>{escape(node['text'])}{inner}</li>")
+            out.append("</ul>")
+            return "\n".join(out)
+
+        parts.append(emit(root))
         list_buf.clear()
 
     for block in ir.blocks:
         if block.kind == "list_item":
-            list_buf.append(_block_html(block))
+            list_buf.append(block)
             continue
         flush_list()
         html = _block_html(block)

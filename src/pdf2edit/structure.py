@@ -322,6 +322,38 @@ def _append_table(ir: Document, rows: list[list[str]], page: int, geo: dict) -> 
     ir.add(Block("table", rows=rows, page=page, **geo))
 
 
+def _list_indent_centers(lines: list[Line], body: float, body_left: float) -> list[float]:
+    """按"列表行自己的缩进位置"聚档。
+
+    不能拿正文左边界当基准——有些文档整页都是列表，根本没有正文行。
+    """
+    xs: set[int] = set()
+    for ln in lines:
+        is_listish = ln.text[:1] in BULLET_CHARS or bool(LIST_NUM.match(ln.text))
+        indented = abs(ln.size - body) < 0.6 and ln.bbox[0] - body_left > body * 0.5
+        if is_listish or indented:
+            xs.add(round(ln.bbox[0]))
+
+    clusters: list[list[float]] = []
+    for x in sorted(xs):
+        if clusters and x - clusters[-1][-1] <= body * 0.8:
+            clusters[-1].append(x)
+        else:
+            clusters.append([x])
+    return [sum(c) / len(c) for c in clusters]
+
+
+def _level_of(x: float, centers: list[float], body: float) -> int:
+    for idx, center in enumerate(centers):
+        if abs(x - center) <= body * 0.8:
+            return idx + 1
+    return 1
+
+
+def _clean_list_text(text: str) -> str:
+    return text.lstrip("•·●○▪◦‣–—* ").strip()
+
+
 def build_document(pdf_path: str | Path) -> Document:
     doc = pymupdf.open(str(pdf_path))
     lines = extract_lines(doc)
@@ -387,12 +419,15 @@ def build_document(pdf_path: str | Path) -> Document:
         for group in _reading_groups(page_lines, page_width):
             # 正文左边界必须按栏算：用全页算会把右栏整体当成缩进的列表
             group_left = _body_left(group, body) if group else body_left
+            rows = _group_rows(group)
+            # 列表层级只从单格行统计：表格单元格本来就是多列的，会把层级顶歪
+            single_cell = [r[0] for r in rows if len(r) == 1]
+            indent_centers = _list_indent_centers(single_cell, body, group_left)
             # 用该栏内"小间距"的中位数估行距，段间距阈值 = 行距 + 0.6 字
             inner = [b.bbox[1] - a.bbox[3] for a, b in zip(group, group[1:])]
             small = sorted(g for g in inner if 0 <= g < body)
             base_gap = small[len(small) // 2] if small else 0.0
             para_gap = base_gap + body * 0.6 if small else body * 1.6
-            rows = _group_rows(group)
             i = 0
             warned_here = False
             while i < len(rows):
@@ -400,7 +435,15 @@ def build_document(pdf_path: str | Path) -> Document:
 
                 if len(row) >= 2 and any(_is_marker(ln.text) for ln in row):
                     flush_all()
-                    ir.add(Block("list_item", text=_row_text(row), page=pno, **_geo(row)))
+                    ir.add(
+                        Block(
+                            "list_item",
+                            text=_clean_list_text(_row_text(row)),
+                            level=_level_of(row[0].bbox[0], indent_centers, body),
+                            page=pno,
+                            **_geo(row),
+                        )
+                    )
                     warned_here = False
                     i += 1
                     continue
@@ -428,6 +471,8 @@ def build_document(pdf_path: str | Path) -> Document:
                 if _is_footer(ln) or _is_margin_noise(ln, body):
                     continue
                 kind, level = _classify(ln, body, group_left, levels)
+                if kind == "list_item":
+                    level = _level_of(ln.bbox[0], indent_centers, body)
                 if kind == "code":
                     flush()
                     code_buf.append(ln)
@@ -436,7 +481,8 @@ def build_document(pdf_path: str | Path) -> Document:
                     buf.append(ln)
                 else:
                     flush_all()
-                    ir.add(Block(kind, text=ln.text, level=level, page=pno, **_geo([ln])))
+                    text = _clean_list_text(ln.text) if kind == "list_item" else ln.text
+                    ir.add(Block(kind, text=text, level=level, page=pno, **_geo([ln])))
             flush_all()
     flush()
     return ir
