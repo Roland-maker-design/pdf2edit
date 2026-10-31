@@ -421,3 +421,50 @@ def test_cross_page_table_merged() -> None:
     assert len(rows) == 46, f"应为表头 + 45 行，实际 {len(rows)}"
     assert rows[-1][0] == "45"
     assert rows[1][2] == "10"
+
+
+# --- 三栏 / 页眉页脚 / 脚注 ---
+
+THREE = ROOT / "fixtures" / "three_cols.pdf"
+HF = ROOT / "fixtures" / "headers_footers.pdf"
+FN = ROOT / "fixtures" / "footnotes.pdf"
+
+
+@pytest.mark.skipif(not THREE.exists(), reason="缺少 three_cols.pdf")
+def test_three_columns_order() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(THREE)
+    assert not any(b.kind == "table" for b in doc.blocks), "三栏正文被误判成表格"
+
+    texts = [b.text for b in doc.blocks if b.kind == "paragraph"]
+    order = [t[:7] for t in texts if "栏第" in t]
+    assert order == [
+        "【第一栏第1段", "【第一栏第2段", "【第一栏第3段",
+        "【第二栏第1段", "【第二栏第2段", "【第二栏第3段",
+        "【第三栏第1段", "【第三栏第2段", "【第三栏第3段",
+    ], order
+
+
+@pytest.mark.skipif(not HF.exists(), reason="缺少 headers_footers.pdf")
+def test_header_footer_removed() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(HF)
+    text = "\n".join(b.text for b in doc.blocks)
+    assert "内部资料" not in text, "页眉/页脚混进了正文"
+    assert "第1节 正文标题" in text and "第2节 正文标题" in text
+    assert "这是第1页的第1行正文" in text
+
+
+@pytest.mark.skipif(not FN.exists(), reason="缺少 footnotes.pdf")
+def test_footnotes_kept_separate() -> None:
+    from pdf2edit.structure import build_document
+
+    doc = build_document(FN)
+    paras = [b.text for b in doc.blocks if b.kind == "paragraph"]
+    body = [p for p in paras if "正文第一段" in p]
+    notes = [p for p in paras if p.startswith("[1]")]
+    assert body, "正文丢失"
+    assert notes, "脚注丢失"
+    assert "参见某文献" not in "".join(body), "脚注被并进了正文"

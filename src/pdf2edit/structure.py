@@ -27,8 +27,10 @@ PAGE_CN = re.compile(r"^第\s*\d+\s*页(\s*共\s*\d+\s*页)?$")
 
 ROW_TOLERANCE = 3.0      # 同一行的 y 中心容差
 COL_TOLERANCE = 12.0     # 列起点对齐容差
-GAP_MIN_WIDTH_RATIO = 0.035   # 栏间空白至少占页宽的 3.5%
+GAP_MIN_WIDTH_RATIO = 0.015   # 栏间空白至少占页宽 1.5%（三栏排版实测只有 2~3%）
 GAP_MAX_LINE_RATIO = 0.15     # 越过该空白的行数低于 15% 才算"走廊"
+CELL_SHORT_CHARS = 12         # 单元格文本中位数不超过此值，才像表格而非分栏正文
+MARGIN_BAND_RATIO = 0.07      # 页眉/页脚判定带
 
 
 def _is_cjk(ch: str) -> bool:
@@ -85,6 +87,22 @@ def _is_footer(ln: Line) -> bool:
     return bool(PAGE_NUM.match(text) or PAGE_CN.match(text))
 
 
+def _is_margin_noise(ln: Line, body: float) -> bool:
+    """页眉/页脚：位于页边带内，且字号明显小于正文。"""
+    if ln.size >= body * 0.95:
+        return False
+    top_band = ln.bbox[1] < ln.page_height * MARGIN_BAND_RATIO
+    bottom_band = ln.bbox[3] > ln.page_height * (1 - MARGIN_BAND_RATIO)
+    return top_band or bottom_band
+
+
+def _is_short_cell_row(row: list[Line]) -> bool:
+    """一行里每格文字都很短，才像表格行；分栏正文的"一行"文字很长。"""
+    lengths = sorted(len(ln.text.strip()) for ln in row)
+    median = lengths[len(lengths) // 2]
+    return median <= CELL_SHORT_CHARS
+
+
 def _classify(ln: Line, body: float, body_left: float, levels: dict[float, int]) -> tuple[str, int]:
     level = levels.get(round(ln.size, 1))
     if level:
@@ -101,71 +119,102 @@ def _classify(ln: Line, body: float, body_left: float, levels: dict[float, int])
 # ---------------------------------------------------------------- 栏分割
 
 
-def _find_column_gap(lines: list[Line], page_width: float) -> tuple[float, float] | None:
-    """找一条纵向空白走廊：覆盖它的行数极少，且宽度够大。"""
+def _find_gaps(lines: list[Line], page_width: float) -> list[tuple[float, float]]:
+    """列出所有纵向空白走廊，宽的在前。
+
+    只保留"两侧都有内容"的走廊——页边空白（扫描区两端）不算，
+    否则递归切栏会一刀砍在左边距上。
+    """
     if len(lines) < 6:
-        return None
+        return []
     step = max(1.0, page_width / 400)
     limit = max(1, int(len(lines) * GAP_MAX_LINE_RATIO))
     min_width = page_width * GAP_MIN_WIDTH_RATIO
 
-    best: tuple[float, float] | None = None
+    lo = min(ln.bbox[0] for ln in lines)
+    hi = max(ln.bbox[2] for ln in lines)
+
+    gaps: list[tuple[float, float]] = []
     run_start: float | None = None
-    x = page_width * 0.15
-    while x < page_width * 0.85:
+    x = page_width * 0.05
+    while x < page_width * 0.95:
         covering = sum(1 for ln in lines if ln.bbox[0] <= x <= ln.bbox[2])
-        free = covering <= limit
-        if free and run_start is None:
-            run_start = x
-        elif not free and run_start is not None:
-            if x - run_start >= min_width and (best is None or x - run_start > best[1] - best[0]):
-                best = (run_start, x)
+        if covering <= limit:
+            if run_start is None:
+                run_start = x
+        else:
+            if run_start is not None and x - run_start >= min_width:
+                gaps.append((run_start, x))
             run_start = None
         x += step
-    if run_start is not None and page_width * 0.85 - run_start >= min_width:
-        if best is None or page_width * 0.85 - run_start > best[1] - best[0]:
-            best = (run_start, page_width * 0.85)
-    return best
+    if run_start is not None and page_width * 0.95 - run_start >= min_width:
+        gaps.append((run_start, page_width * 0.95))
+
+    # 只留夹在内容中间的走廊
+    valid = [(a, b) for a, b in gaps if a > lo + 1 and b < hi - 1]
+    valid.sort(key=lambda g: g[1] - g[0], reverse=True)
+    return valid
+
+
+def _xy_split(lines: list[Line], page_width: float, depth: int = 0) -> list[list[Line]]:
+    """递归切栏：一刀切成左右，再对每侧继续切，直到没走廊。三栏及以上靠它。"""
+    if len(lines) < 6 or depth >= 3:
+        return [sorted(lines, key=_center_y)]
+
+    left: list[Line] = []
+    right: list[Line] = []
+    gap: tuple[float, float] | None = None
+    for cand in _find_gaps(lines, page_width):
+        mid = (cand[0] + cand[1]) / 2
+        l = [ln for ln in lines if ln.bbox[2] <= mid]
+        r = [ln for ln in lines if ln.bbox[0] >= mid]
+        # 每侧至少 3 行才算真的一栏：单个页码/页脚凑出来的"右侧"不算
+        if len(l) >= 3 and len(r) >= 3:
+            left, right, gap = l, r, cand
+            break
+    if gap is None:
+        return [sorted(lines, key=_center_y)]
+
+    mid = (gap[0] + gap[1]) / 2
+    spanning = [ln for ln in lines if ln.bbox[2] > mid > ln.bbox[0]]
+
+    groups = _xy_split(left, page_width, depth + 1) + _xy_split(right, page_width, depth + 1)
+    for ln in sorted(spanning, key=_center_y):
+        groups.append([ln])
+    groups.sort(key=lambda g: _center_y(g[0]))
+    return groups
+
+
+def _has_table_run(rows: list[list[Line]], min_run: int = 2) -> bool:
+    """连续两行以上"每格都短"才算表格；零星单行短说明不了问题。"""
+    run = 0
+    for row in rows:
+        if len(row) >= 2 and _is_short_cell_row(row):
+            run += 1
+            if run >= min_run:
+                return True
+        else:
+            run = 0
+    return False
 
 
 def _reading_groups(page_lines: list[Line], page_width: float) -> list[list[Line]]:
-    """把一页的行排成阅读顺序的分组：通栏元素自成一组，栏内元素左栏先、右栏后。
+    """排成阅读顺序的分组。
 
-    注意：探测栏间隙时必须排除表格行。表格列之间天然有大片空白，
-    否则会被误判成栏，把表格拦腰切断。
+    含表格的页不切栏（切栏会把表格列间空白当走廊）；
+    多栏页先剔除表格行再递归切栏。
     """
     rows = _group_rows(page_lines)
-    table_ids = {id(ln) for row in rows if len(row) >= 3 for ln in row}
-    probe = [ln for ln in page_lines if id(ln) not in table_ids]
-    # 一页全被表格占据时没有可靠探针；绝不能退回全部行再去切栏，否则会把表格切断
-    if not probe:
+    # 有表格就整页按行处理：跨页/多栏混排在当前版本不支持
+    if _has_table_run(rows):
         return [sorted(page_lines, key=_center_y)]
 
-    gap = _find_column_gap(probe, page_width)
-    if not gap:
+    # 页码/页脚不参与切栏，否则会凑出并不存在的"右侧内容"
+    body_lines = [ln for ln in page_lines if not _is_footer(ln)]
+    if len(body_lines) < 6:
         return [sorted(page_lines, key=_center_y)]
 
-    g0, g1 = gap
-    mid = (g0 + g1) / 2          # 按中线判定，避免采样步长带来的边缘误差
-    spanning, left, right = [], [], []
-    for ln in page_lines:
-        if ln.bbox[2] <= mid:
-            left.append(ln)
-        elif ln.bbox[0] >= mid:
-            right.append(ln)
-        else:
-            spanning.append(ln)      # 骑在走廊上的，按通栏处理
-
-    if not left or not right:
-        return [sorted(page_lines, key=_center_y)]
-
-    for bucket in (left, right, spanning):
-        bucket.sort(key=_center_y)
-
-    groups: list[list[Line]] = [left, right] + [[ln] for ln in spanning]
-    # 通栏标题/页尾可能夹在栏前后，按各自首行的 y 排序还原阅读顺序
-    groups.sort(key=lambda g: _center_y(g[0]))
-    return groups
+    return _xy_split(body_lines, page_width)
 
 
 # ---------------------------------------------------------------- 行组与表格
@@ -196,11 +245,11 @@ def _cols_of(row: list[Line]) -> list[float]:
 
 
 def _looks_like_table(rows: list[list[Line]], i: int) -> bool:
-    """三格以上直接算表；两格要和下一行对齐才认（避免把双栏正文当表格）。"""
+    """表格行必须"每格都短"；否则那是分栏正文，不是表格。"""
     row = rows[i]
     if len(row) >= 3:
-        return True
-    if len(row) != 2:
+        return _is_short_cell_row(row)
+    if len(row) != 2 or not _is_short_cell_row(row):
         return False
     if i + 1 >= len(rows) or len(rows[i + 1]) != 2:
         return False
@@ -211,7 +260,7 @@ def _looks_like_table(rows: list[list[Line]], i: int) -> bool:
 def _collect_table(rows: list[list[Line]], i: int) -> tuple[list[list[str]], list[Line], int]:
     out: list[list[str]] = []
     lines: list[Line] = []
-    while i < len(rows) and len(rows[i]) >= 2:
+    while i < len(rows) and len(rows[i]) >= 2 and _is_short_cell_row(rows[i]):
         cells = [ln.text.strip() for ln in _row_cells(rows[i])]
         # 跨页时表头可能重复出现，丢掉重复表头
         if out and cells == out[0]:
@@ -333,7 +382,7 @@ def build_document(pdf_path: str | Path) -> Document:
 
                 ln = row[0]
                 i += 1
-                if _is_footer(ln):
+                if _is_footer(ln) or _is_margin_noise(ln, body):
                     continue
                 kind, level = _classify(ln, body, group_left, levels)
                 if kind == "paragraph":
