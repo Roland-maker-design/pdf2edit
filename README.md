@@ -11,7 +11,7 @@
 | Markdown | ✅ 可用 | 结构优先，适合喂给 AI |
 | Word (docx) | ✅ 可用 | 流式，全部用 Word 内置样式（改一次样式全篇生效） |
 | HTML | ✅ 可用 | 语义标签 + 干净 CSS，自带深色模式 |
-| PowerPoint (pptx) | 计划 | 文本框化，可编辑 |
+| PowerPoint (pptx) | ✅ 可用 | 按原版面摆文本框，原生可编辑 |
 | Excel (xlsx) | 计划 | 先做表格识别 |
 
 ## 不支持

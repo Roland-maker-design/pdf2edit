@@ -1,4 +1,4 @@
-"""命令行入口：python -m pdf2edit <pdf> --to md|docx|html [-o 输出路径]"""
+"""命令行入口：python -m pdf2edit <pdf> --to md|docx|html|pptx [-o 输出路径]"""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ import pymupdf
 
 from .quality import assess
 from .structure import build_document
-from .writers import docx_writer, html_writer, markdown
+from .writers import docx_writer, html_writer, markdown, pptx_writer
 
-_EXT = {"md": ".md", "docx": ".docx", "html": ".html"}
+_EXT = {"md": ".md", "docx": ".docx", "html": ".html", "pptx": ".pptx"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.to == "docx":
         docx_writer.render(ir, out)
+    elif args.to == "pptx":
+        pptx_writer.render(ir, out)
     elif args.to == "html":
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(html_writer.render(ir), encoding="utf-8")

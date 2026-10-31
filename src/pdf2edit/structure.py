@@ -126,12 +126,33 @@ def _looks_like_table(rows: list[list[Line]], i: int) -> bool:
     return all(abs(x - y) <= COL_TOLERANCE for x, y in zip(a_cols, b_cols))
 
 
-def _collect_table(rows: list[list[Line]], i: int) -> tuple[list[list[str]], int]:
+def _collect_table(rows: list[list[Line]], i: int) -> tuple[list[list[str]], list[Line], int]:
     out: list[list[str]] = []
+    lines: list[Line] = []
     while i < len(rows) and len(rows[i]) >= 2:
         out.append([ln.text.strip() for ln in sorted(rows[i], key=lambda l: l.bbox[0])])
+        lines.extend(rows[i])
         i += 1
-    return out, i
+    return out, lines, i
+
+
+def _union(lines: list[Line]) -> tuple[float, float, float, float]:
+    return (
+        min(l.bbox[0] for l in lines),
+        min(l.bbox[1] for l in lines),
+        max(l.bbox[2] for l in lines),
+        max(l.bbox[3] for l in lines),
+    )
+
+
+def _geo(lines: list[Line]) -> dict:
+    """打包可选几何信息，供 pptx 这类需要绝对定位的 writer 使用。"""
+    head = lines[0]
+    return {
+        "bbox": _union(lines),
+        "page_size": (head.page_width, head.page_height),
+        "size": head.size,
+    }
 
 
 def _flush(buf: list[Line], doc: Document) -> None:
@@ -139,6 +160,7 @@ def _flush(buf: list[Line], doc: Document) -> None:
         return
     cur = buf[0]
     text = cur.text
+    acc = [cur]
     for nxt in buf[1:]:
         gap = nxt.bbox[1] - cur.bbox[3]
         broken = (
@@ -147,12 +169,14 @@ def _flush(buf: list[Line], doc: Document) -> None:
             or nxt.page != cur.page
         )
         if broken:
-            doc.add(Block("paragraph", text=text, page=cur.page))
+            doc.add(Block("paragraph", text=text, page=cur.page, **_geo(acc)))
             text = nxt.text
+            acc = [nxt]
         else:
             text = _join(text, nxt.text)
+            acc.append(nxt)
         cur = nxt
-    doc.add(Block("paragraph", text=text, page=cur.page))
+    doc.add(Block("paragraph", text=text, page=cur.page, **_geo(acc)))
 
 
 def build_document(pdf_path: str | Path) -> Document:
@@ -179,7 +203,7 @@ def build_document(pdf_path: str | Path) -> Document:
             text = " ".join(
                 ln.text.strip() for ln in sorted(row, key=lambda l: l.bbox[0]) if not _is_marker(ln.text)
             )
-            ir.add(Block("list_item", text=text, page=row[0].page))
+            ir.add(Block("list_item", text=text, page=row[0].page, **_geo(row)))
             i += 1
             continue
 
@@ -187,8 +211,8 @@ def build_document(pdf_path: str | Path) -> Document:
         if _looks_like_table(rows, i):
             _flush(buf, ir)
             buf = []
-            table, i = _collect_table(rows, i)
-            ir.add(Block("table", rows=table, page=rows[i - 1][0].page))
+            table, table_lines, i = _collect_table(rows, i)
+            ir.add(Block("table", rows=table, page=table_lines[0].page, **_geo(table_lines)))
             continue
 
         # 3) 普通行
@@ -202,6 +226,6 @@ def build_document(pdf_path: str | Path) -> Document:
         else:
             _flush(buf, ir)
             buf = []
-            ir.add(Block(kind, text=ln.text, level=level, page=ln.page))
+            ir.add(Block(kind, text=ln.text, level=level, page=ln.page, **_geo([ln])))
     _flush(buf, ir)
     return ir

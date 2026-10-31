@@ -273,3 +273,65 @@ def test_html_uses_first_heading_as_title() -> None:
     html = render(ir)
     assert "<title>第一章 绪论</title>" in html
     assert '<html lang="zh-CN">' in html
+
+
+# --- pptx 输出 ---
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_pptx_slide_and_shapes(tmp_path: Path) -> None:
+    from pptx import Presentation
+
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.pptx_writer import render
+
+    out = tmp_path / "out.pptx"
+    render(build_document(WORD), out)
+
+    prs = Presentation(str(out))
+    assert len(prs.slides) == 1
+    slide = prs.slides[0]
+    texts = [sh.text_frame.text for sh in slide.shapes if sh.has_text_frame]
+    tables = [sh.table for sh in slide.shapes if sh.has_table]
+
+    assert any("第一章 绪论" in t for t in texts)
+    assert any("第一，理论基础尚不完善。" in t for t in texts)
+    assert len(tables) == 1
+    assert len(tables[0].rows) == 3
+    assert tables[0].cell(0, 0).text == "指标"
+    assert tables[0].cell(2, 2).text == "93.7%"
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_pptx_slide_size_matches_pdf_page(tmp_path: Path) -> None:
+    from pptx import Presentation
+    from pptx.util import Pt
+
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.pptx_writer import render
+
+    ir = build_document(WORD)
+    page_size = next(b.page_size for b in ir.blocks if b.page_size)
+    out = tmp_path / "size.pptx"
+    render(ir, out)
+
+    prs = Presentation(str(out))
+    assert abs(prs.slide_width - Pt(page_size[0])) < 100
+    assert abs(prs.slide_height - Pt(page_size[1])) < 100
+
+
+def test_pptx_degrades_without_geometry(tmp_path: Path) -> None:
+    """没有坐标时必须能退化，不能崩。"""
+    from pptx import Presentation
+
+    from pdf2edit.ir import Block, Document
+    from pdf2edit.writers.pptx_writer import render
+
+    ir = Document(blocks=[
+        Block("heading", text="标题", level=1, page=1, size=18),
+        Block("paragraph", text="正文一段", page=1, size=11),
+    ])
+    out = tmp_path / "nogeo.pptx"
+    render(ir, out)
+    prs = Presentation(str(out))
+    assert len(prs.slides) == 1
+    assert len(prs.slides[0].shapes) == 2
