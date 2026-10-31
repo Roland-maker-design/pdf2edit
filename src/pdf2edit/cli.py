@@ -1,4 +1,4 @@
-"""命令行入口：python -m pdf2edit <pdf> --to md|docx [-o 输出路径]"""
+"""命令行入口：python -m pdf2edit <pdf> --to md|docx|html [-o 输出路径]"""
 
 from __future__ import annotations
 
@@ -10,13 +10,15 @@ import pymupdf
 
 from .quality import assess
 from .structure import build_document
-from .writers import docx_writer, markdown
+from .writers import docx_writer, html_writer, markdown
+
+_EXT = {"md": ".md", "docx": ".docx", "html": ".html"}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="pdf2edit", description="把电子版 PDF 转成可编辑格式")
     ap.add_argument("pdf", help="输入 PDF 路径")
-    ap.add_argument("--to", default="md", choices=["md", "docx"], help="目标格式")
+    ap.add_argument("--to", default="md", choices=list(_EXT), help="目标格式")
     ap.add_argument("-o", "--out", help="输出文件路径（默认与输入同名）")
     args = ap.parse_args(argv)
 
@@ -32,12 +34,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     ir = build_document(src)
+    out = Path(args.out) if args.out else src.with_suffix(_EXT[args.to])
 
     if args.to == "docx":
-        out = Path(args.out) if args.out else src.with_suffix(".docx")
         docx_writer.render(ir, out)
+    elif args.to == "html":
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(html_writer.render(ir), encoding="utf-8")
     else:
-        out = Path(args.out) if args.out else src.with_suffix(".md")
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(markdown.render(ir), encoding="utf-8")
 

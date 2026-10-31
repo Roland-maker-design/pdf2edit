@@ -227,3 +227,49 @@ def test_docx_keeps_body_text(tmp_path: Path) -> None:
     text = "\n".join(p.text for p in doc.paragraphs)
     assert "国内外学者对该问题已有大量研究" in text
     assert "Last paragraph in English to verify spacing is preserved." in text
+
+
+# --- html 输出 ---
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_html_semantic_tags() -> None:
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.html_writer import render
+
+    html = render(build_document(WORD))
+    assert "<h1>第一章 绪论</h1>" in html
+    assert "<h2>1.1 研究背景</h2>" in html
+    assert "<ul>" in html and html.count("<li>") == 3
+    assert "<th>指标</th>" in html
+    assert "<td>93.7%</td>" in html
+
+
+@pytest.mark.skipif(not WORD.exists(), reason="缺少 word_export.pdf")
+def test_html_has_no_absolute_positioning() -> None:
+    from pdf2edit.structure import build_document
+    from pdf2edit.writers.html_writer import render
+
+    html = render(build_document(WORD))
+    assert "position:absolute" not in html
+    assert "position: absolute" not in html
+
+
+def test_html_escapes_special_characters() -> None:
+    from pdf2edit.ir import Block, Document
+    from pdf2edit.writers.html_writer import render
+
+    ir = Document(blocks=[Block("paragraph", text='<script>alert("x")</script> & more')])
+    html = render(ir)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+    assert "&amp; more" in html
+
+
+def test_html_uses_first_heading_as_title() -> None:
+    from pdf2edit.ir import Block, Document
+    from pdf2edit.writers.html_writer import render
+
+    ir = Document(blocks=[Block("heading", text="第一章 绪论", level=1), Block("paragraph", text="正文")])
+    html = render(ir)
+    assert "<title>第一章 绪论</title>" in html
+    assert '<html lang="zh-CN">' in html
