@@ -108,4 +108,6 @@ python -m pytest tests -q
 
 ## 许可证
 
-AGPL-3.0 —— 因为依赖 PyMuPDF（AGPL）。
+AGPL-3.0，全文见 [LICENSE](LICENSE)。选它是因为依赖 PyMuPDF，而 PyMuPDF 本身是 AGPL。
+
+说人话：**自己用、公司内部用、随便改，都不用付钱，也不用告诉我们。**约束的是「把它做成在线服务对外提供」——那种情况得把改动一起开源。
