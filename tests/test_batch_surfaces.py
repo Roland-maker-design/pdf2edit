@@ -118,3 +118,43 @@ def test_web_ui_keeps_both_when_uploads_share_a_name(
 
     assert resp.status_code == 200
     assert len(list(tmp_path.rglob("*.md"))) == 2
+
+
+def test_cli_survives_console_that_cannot_print_chinese(
+    sample_pdf: Path, tmp_path: Path
+) -> None:
+    """英文系统的控制台用 cp1252，打印中文不能把整个命令搞崩。
+
+    CI 上的 Windows runner 就是这种情况：本地中文系统用 cp936，一直没暴露。
+    """
+    shutil.copy(sample_pdf, tmp_path / "one.pdf")
+    shutil.copy(sample_pdf, tmp_path / "two.pdf")
+    outdir = tmp_path / "out"
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pdf2edit",
+            str(tmp_path / "one.pdf"),
+            str(tmp_path / "two.pdf"),
+            "--to",
+            "md",
+            "-o",
+            str(outdir),
+        ],
+        cwd=str(ROOT),
+        env={
+            **os.environ,
+            "PYTHONPATH": str(ROOT / "src"),
+            "PYTHONIOENCODING": "cp1252",
+        },
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert (outdir / "one.md").exists()
+    assert (outdir / "two.md").exists()

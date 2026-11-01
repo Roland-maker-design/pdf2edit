@@ -1,4 +1,4 @@
-﻿"""命令行入口。
+"""命令行入口。
 
     python -m pdf2edit <pdf>                    # 单份，转 Markdown 到源文件旁边
     python -m pdf2edit <pdf> --to docx -o 输出.docx
@@ -17,7 +17,24 @@ from .convert import collect_pdfs, convert_many, convert_to_paths
 _EXT = {"md": ".md", "docx": ".docx", "html": ".html", "pptx": ".pptx", "xlsx": ".xlsx"}
 
 
+def _safe_output() -> None:
+    """控制台编码装不下中文时，别让整条命令崩掉。
+
+    只放宽错误处理，不改编码：中文控制台（cp936）照样正常显示中文，
+    英文控制台（cp1252）显示不了的字符退化成 '?'。转换结果本身不受影响。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(errors="replace")
+        except (ValueError, OSError):
+            continue
+
+
 def main(argv: list[str] | None = None) -> int:
+    _safe_output()
     ap = argparse.ArgumentParser(prog="pdf2edit", description="把电子版 PDF 转成可编辑格式")
     ap.add_argument("pdfs", nargs="*", help="输入 PDF，可以给多个，也可以给文件夹")
     ap.add_argument(
