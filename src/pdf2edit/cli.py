@@ -1,6 +1,8 @@
-"""命令行入口。
+﻿"""命令行入口。
 
-    python -m pdf2edit <pdf> --to md|docx|html|pptx|xlsx [-o 输出路径]
+    python -m pdf2edit <pdf>                    # 单份，转 Markdown 到源文件旁边
+    python -m pdf2edit <pdf> --to docx -o 输出.docx
+    python -m pdf2edit a.pdf b.pdf 某个文件夹/ --to md docx -o 输出目录
     python -m pdf2edit --ui [--port 8765]
 """
 
@@ -10,20 +12,26 @@ import argparse
 import sys
 from pathlib import Path
 
-import pymupdf
-
-from .quality import assess
-from .structure import build_document
-from .writers import docx_writer, html_writer, markdown, pptx_writer, xlsx_writer
+from .convert import collect_pdfs, convert_many, convert_to_paths
 
 _EXT = {"md": ".md", "docx": ".docx", "html": ".html", "pptx": ".pptx", "xlsx": ".xlsx"}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="pdf2edit", description="把电子版 PDF 转成可编辑格式")
-    ap.add_argument("pdf", nargs="?", help="输入 PDF 路径")
-    ap.add_argument("--to", default="md", choices=list(_EXT), help="目标格式")
-    ap.add_argument("-o", "--out", help="输出文件路径（默认与输入同名）")
+    ap.add_argument("pdfs", nargs="*", help="输入 PDF，可以给多个，也可以给文件夹")
+    ap.add_argument(
+        "--to",
+        default=["md"],
+        nargs="+",
+        choices=list(_EXT),
+        help="目标格式，可以给多个（默认 md）",
+    )
+    ap.add_argument(
+        "-o",
+        "--out",
+        help="单份单格式时是输出文件名；批量时是输出目录",
+    )
     ap.add_argument("--ui", action="store_true", help="启动本地网页界面")
     ap.add_argument("--window", action="store_true", help="启动桌面窗口界面")
     ap.add_argument("--port", type=int, default=8765, help="网页界面端口")
@@ -42,44 +50,48 @@ def main(argv: list[str] | None = None) -> int:
         run(host=args.host, port=args.port)
         return 0
 
-    if not args.pdf:
+    if not args.pdfs:
         ap.print_help()
         return 2
 
-    src = Path(args.pdf)
-    if not src.exists():
-        print(f"找不到文件: {src}", file=sys.stderr)
+    formats = list(dict.fromkeys(args.to))
+    srcs = collect_pdfs([Path(p) for p in args.pdfs])
+    if not srcs:
+        print("这里没有 PDF 文件", file=sys.stderr)
         return 2
 
-    doc = pymupdf.open(str(src))
-    report = assess(doc)
-    if not report.ok:
-        print(f"拒绝转换：{report.reason}", file=sys.stderr)
-        return 1
+    single = len(srcs) == 1 and len(formats) == 1
+    if single:
+        src = srcs[0]
+        target = Path(args.out) if args.out else src.with_suffix(_EXT[formats[0]])
+        if target.is_dir():
+            target = target / f"{src.stem}{_EXT[formats[0]]}"
+        outcome = convert_to_paths(src, {formats[0]: target})
+        results = [outcome]
+        if outcome["ok"]:
+            print(f"已生成 {outcome['files'][0]}")
+            if outcome["reason"]:
+                print(f"  {outcome['reason']}")
+        else:
+            print(f"拒绝转换 {src.name}：{outcome['reason']}", file=sys.stderr)
+        return 0 if outcome["ok"] else 1
 
-    ir = build_document(src)
-    out = Path(args.out) if args.out else src.with_suffix(_EXT[args.to])
+    outdir = Path(args.out) if args.out else Path.cwd() / "pdf2edit-out"
+    print(f"共 {len(srcs)} 个文件，输出到 {outdir}（格式：{', '.join(formats)}）")
 
-    if args.to == "docx":
-        docx_writer.render(ir, out)
-    elif args.to == "pptx":
-        pptx_writer.render(ir, out)
-    elif args.to == "xlsx":
-        try:
-            xlsx_writer.render(ir, out)
-        except ValueError as exc:
-            print(f"拒绝转换：{exc}", file=sys.stderr)
-            return 1
-    elif args.to == "html":
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(html_writer.render(ir), encoding="utf-8")
-    else:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(markdown.render(ir), encoding="utf-8")
+    def report(index: int, total: int, src: Path, _outcome: dict) -> None:
+        print(f"  [{index}/{total}] {Path(src).name}")
 
-    print(f"已生成 {out}（{len(ir.blocks)} 个块）")
-    return 0
+    results = convert_many(srcs, outdir, formats, on_progress=report)
+
+    ok = sum(1 for r in results if r["ok"])
+    failed = [r for r in results if not r["ok"]]
+    print(f"完成：成功 {ok} · 失败 {len(failed)}")
+    for r in failed:
+        print(f"  ✗ {Path(r['src']).name} — {r['reason']}", file=sys.stderr)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

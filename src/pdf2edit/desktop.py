@@ -23,16 +23,17 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from .convert import FORMAT_LABELS, SUPPORTED_FORMATS, convert_file
+from .convert import FORMAT_LABELS, SUPPORTED_FORMATS, collect_pdfs, convert_many
 
 
 class DropArea(QFrame):
-    """接收拖拽的区域。"""
+    """接收拖拽的区域：PDF 和文件夹都收。"""
 
     filesDropped = Signal(list)
 
@@ -45,14 +46,14 @@ class DropArea(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        self.title = QLabel("把 PDF 拖到这里")
+        self.title = QLabel("把 PDF 或整个文件夹拖到这里")
         self.title.setAlignment(Qt.AlignCenter)
         font = QFont()
         font.setPointSize(13)
         font.setBold(True)
         self.title.setFont(font)
 
-        self.hint = QLabel("或者点击下方「选择文件」；支持多选")
+        self.hint = QLabel("或者点击下方「选择文件」；支持一次选多个")
         self.hint.setAlignment(Qt.AlignCenter)
         self.hint.setObjectName("hint")
 
@@ -75,11 +76,8 @@ class DropArea(QFrame):
         self.setProperty("hover", False)
         self.style().unpolish(self)
         self.style().polish(self)
-        paths = [
-            u.toLocalFile()
-            for u in event.mimeData().urls()
-            if u.isLocalFile() and u.toLocalFile().lower().endswith(".pdf")
-        ]
+        # 文件夹也放行，筛 PDF 的事交给 collect_pdfs，一处判断
+        paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
         if paths:
             self.filesDropped.emit(paths)
             event.acceptProposedAction()
@@ -87,6 +85,7 @@ class DropArea(QFrame):
 
 class ConvertWorker(QThread):
     finished_with_results = Signal(list)
+    progress = Signal(int, int, str)
 
     def __init__(self, files: list[Path], formats: list[str], outdir: Path):
         super().__init__()
@@ -95,14 +94,10 @@ class ConvertWorker(QThread):
         self._outdir = outdir
 
     def run(self) -> None:
-        results = []
-        for src in self._files:
-            try:
-                outcome = convert_file(src, self._outdir, self._formats)
-            except Exception as exc:  # noqa: BLE001 - 单个文件失败不该中断整批
-                outcome = {"ok": False, "reason": f"处理失败：{exc}", "files": []}
-            outcome["name"] = src.name
-            results.append(outcome)
+        def report(index: int, total: int, src: Path, _outcome: dict) -> None:
+            self.progress.emit(index, total, Path(src).name)
+
+        results = convert_many(self._files, self._outdir, self._formats, on_progress=report)
         self.finished_with_results.emit(results)
 
 
@@ -178,6 +173,11 @@ class MainWindow(QMainWindow):
         self.convert_btn.clicked.connect(self.start_convert)
         layout.addWidget(self.convert_btn)
 
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        self.progress.setTextVisible(True)
+        layout.addWidget(self.progress)
+
         self.results = QListWidget()
         layout.addWidget(self.results, 1)
 
@@ -195,13 +195,19 @@ class MainWindow(QMainWindow):
     # ---------- 文件 ----------
 
     def add_files(self, paths: list[str]) -> None:
-        for p in paths:
-            path = Path(p)
-            if path.suffix.lower() != ".pdf" or path in self._files:
-                continue
-            self._files.append(path)
+        before = len(self._files)
+        self._files = collect_pdfs([*self._files, *(Path(p) for p in paths)])
+        added = len(self._files) - before
+        if not self._files:
+            self.status.setText("这里没有 PDF 文件")
+            return
+        self.file_list.clear()
+        for path in self._files:
             self.file_list.addItem(path.name)
-        self.status.setText(f"已选择 {len(self._files)} 个文件")
+        text = f"已选择 {len(self._files)} 个文件"
+        if added and before:
+            text += f"（新增 {added}）"
+        self.status.setText(text)
 
     def pick_files(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(self, "选择 PDF", "", "PDF 文件 (*.pdf)")
@@ -239,28 +245,47 @@ class MainWindow(QMainWindow):
         self.convert_btn.setText("转换中…")
         self.results.clear()
         self.status.setText("正在转换")
+        self.progress.setRange(0, len(self._files))
+        self.progress.setValue(0)
+        self.progress.setFormat("%v / %m")
+        self.progress.setVisible(True)
 
         self._worker = ConvertWorker(list(self._files), formats, Path(self.out_edit.text()))
+        self._worker.progress.connect(self.on_progress)
         self._worker.finished_with_results.connect(self.show_results)
         self._worker.start()
+
+    def on_progress(self, index: int, total: int, name: str) -> None:
+        self.progress.setValue(index)
+        self.status.setText(f"正在转换 {index}/{total}：{name}")
 
     def show_results(self, results: list) -> None:
         self.convert_btn.setEnabled(True)
         self.convert_btn.setText("开始转换")
+        self.progress.setVisible(False)
 
         ok_count = 0
+        partial_count = 0
+        fail_count = 0
         for r in results:
+            name = r.get("src", Path("?")).name
             if r["ok"]:
                 ok_count += 1
                 names = "、".join(f.name for f in r["files"])
-                text = f"✓ {r['name']} → {names}"
+                text = f"✓ {name} → {names}"
                 if r["reason"]:
+                    partial_count += 1
                     text += f"（{r['reason']}）"
             else:
-                text = f"✗ {r['name']} — {r['reason']}"
+                fail_count += 1
+                text = f"✗ {name} — {r['reason']}"
             self.results.addItem(text)
 
-        self.status.setText(f"完成：{ok_count}/{len(results)} 个文件转换成功")
+        parts = [f"成功 {ok_count}"]
+        if partial_count:
+            parts.append(f"部分跳过 {partial_count}")
+        parts.append(f"失败 {fail_count}")
+        self.status.setText("完成：" + " · ".join(parts))
 
 
 _STYLE = """

@@ -19,7 +19,7 @@ from ..quality import assess
 from ..structure import build_document
 from ..writers import docx_writer, html_writer, markdown, pptx_writer, xlsx_writer
 
-from ..convert import FORMAT_LABELS, convert_file
+from ..convert import FORMAT_LABELS, convert_file, unique_name
 
 FORMATS = FORMAT_LABELS
 
@@ -61,8 +61,10 @@ def create_app(workdir: Path | None = None) -> Flask:
         jobdir.mkdir(parents=True, exist_ok=True)
 
         results = []
+        saved: set[str] = set()
         for upload in uploads:
-            safe_name = Path(upload.filename).name
+            # 两个文件同名时不能覆盖：report.pdf → report (2).pdf
+            safe_name = unique_name(Path(upload.filename).name, saved)
             src = jobdir / safe_name
             upload.save(src)
             try:
