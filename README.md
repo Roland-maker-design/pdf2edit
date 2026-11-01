@@ -45,6 +45,10 @@ python -m pdf2edit 一堆论文/ --to md docx -o 输出目录
 - 勾了多种格式：每份一个子文件夹 `a/a.md`、`a/a.docx`（否则 3 份 × 5 格式就是 15 个文件摊一地）
 - 不同目录里的同名文件自动写成 `report (2).md`，不会互相覆盖
 
+批量跑完是这样（三份里有一份不是 PDF，会单独标出来，不耽误其他）：
+
+![批量结果](docs/images/ui-batch.png)
+
 桌面窗口长这样：
 
 ![桌面界面](docs/images/ui-window.png)
