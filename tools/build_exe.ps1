@@ -38,3 +38,5 @@ Write-Host "自检通过："
 Get-Content (Join-Path $out 'selftest.log') -Encoding UTF8 | Write-Host
 
 Pop-Location
+# 显式返回 0：脚本里跑过 native 程序，不写这句退出码会跟着 $LASTEXITCODE 漂
+exit 0

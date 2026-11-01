@@ -1,4 +1,4 @@
-"""Windows 桌面窗口（PySide6）。
+﻿"""Windows 桌面窗口（PySide6）。
 
 - 拖入 PDF，选格式，点按钮，结果直接出现在输出目录
 - 转换在后台线程跑，界面不会卡死
@@ -105,7 +105,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("pdf2edit — 本地 PDF 转换")
-        self.resize(780, 660)
+        self.resize(780, 760)
 
         self._files: list[Path] = []
         self._worker: ConvertWorker | None = None
@@ -179,6 +179,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.progress)
 
         self.results = QListWidget()
+        self.results.setMinimumHeight(150)
         layout.addWidget(self.results, 1)
 
         bottom = QHBoxLayout()
@@ -338,3 +339,4 @@ def run() -> None:
     win = MainWindow()
     win.show()
     sys.exit(app.exec())
+
