@@ -24,6 +24,9 @@ BULLET_CHARS = "•·●○▪◦‣–—*"
 LIST_NUM = re.compile(r"^(\d{1,2})[.、)）](?![\d%])")
 PAGE_NUM = re.compile(r"^[-—–\s]*\d{1,4}[-—–\s]*$")
 PAGE_CN = re.compile(r"^第\s*\d+\s*页(\s*共\s*\d+\s*页)?$")
+SECTION_NUM = re.compile(r"^(\d+(?:\.\d+){0,3})\s+\S")
+SENTENCE_END = "。．.!?;；:"
+CONNECTORS = {"and", "of", "the", "for", "in", "on", "to", "a", "an", "with", "from"}
 
 ROW_TOLERANCE = 3.0      # 同一行的 y 中心容差
 COL_TOLERANCE = 12.0     # 列起点对齐容差
@@ -98,8 +101,12 @@ def _is_mono(font: str) -> bool:
 
 
 def _is_footer(ln: Line) -> bool:
+    """页码只在页边带内才算——否则章节编号 "1" 会被当成页码删掉。"""
     text = ln.text.strip()
-    return bool(PAGE_NUM.match(text) or PAGE_CN.match(text))
+    if not (PAGE_NUM.match(text) or PAGE_CN.match(text)):
+        return False
+    in_band = ln.bbox[1] < ln.page_height * 0.08 or ln.bbox[3] > ln.page_height * 0.92
+    return in_band
 
 
 def _is_margin_noise(ln: Line, body: float) -> bool:
@@ -118,12 +125,68 @@ def _is_short_cell_row(row: list[Line]) -> bool:
     return median <= CELL_SHORT_CHARS
 
 
+
+HEADING_CHARS = re.compile(r"^[A-Za-z0-9\u4e00-\u9fff \t\-&/()\[\].,:、，]+$")
+
+
+def _is_phrase_heading(text: str) -> bool:
+    """未编号的标题：短短语，不是作者名行，不以小写开头。"""
+    text = text.strip()
+    if not text or len(text) > 40 or not HEADING_CHARS.match(text):
+        return False
+    if text[:1].islower() or text[-1] in SENTENCE_END:
+        return False
+    words = text.split()
+    if len(words) >= 3 and all(w[:1].isupper() for w in words) and not any(
+        w.lower() in CONNECTORS for w in words
+    ):
+        return False
+    return len(words) <= 4
+
+
+def _bold_heading_level(ln: Line, body: float) -> int | None:
+    """LaTeX 常见：章节标题与正文同字号，只靠加粗区分。
+
+    约束三条，都是被真实论文打出来的：不含 @（邮箱）、不含 ∗‡ 这类符号
+    （作者名、版权声明）、未编号的必须短。
+    """
+    if not ln.bold or ln.size > body * 1.05:
+        return None
+    text = ln.text.strip()
+    if not text or len(text) > 80:
+        return None
+    if text[-1] in SENTENCE_END or "@" in text:
+        return None
+    if not HEADING_CHARS.match(text):
+        return None
+    # 折行的续行以小写字母开头，不是标题
+    if text[:1].islower():
+        return None
+    m = SECTION_NUM.match(text)
+    if m:
+        return min(1 + m.group(1).count("."), 3)
+    return 2 if _is_phrase_heading(text) else None
+
+
 def _classify(ln: Line, body: float, body_left: float, levels: dict[float, int]) -> tuple[str, int]:
     if _is_mono(ln.font):
         return "code", 0
     level = levels.get(round(ln.size, 1))
     if level:
-        return "heading", level
+        text = ln.text.strip()
+        # 大字号也不等于标题：得是不含怪符号的短语，且不以小写字母起头
+        # （版权声明的续行、带 ∗‡ 的作者名都是被真实论文打出来的反例）
+        looks_like_title = (
+            len(text) <= 60
+            and bool(HEADING_CHARS.match(text))
+            and not (text[:1].islower())
+            and text[-1] not in SENTENCE_END
+        )
+        if ln.bold or looks_like_title:
+            return "heading", level
+    bold_level = _bold_heading_level(ln, body)
+    if bold_level is not None:
+        return "heading", bold_level
     if ln.text[:1] in BULLET_CHARS:
         return "list_item", 0
     if LIST_NUM.match(ln.text):
@@ -343,6 +406,17 @@ def _list_indent_centers(lines: list[Line], body: float, body_left: float) -> li
     return [sum(c) / len(c) for c in clusters]
 
 
+def _is_wordy_cell(text: str) -> bool:
+    """单元格里主要是词而不是符号。公式碎片（V (1)、√dk）过不了这关。"""
+    text = text.strip()
+    if not text:
+        return False
+    symbols = sum(
+        1 for ch in text if not ch.isalnum() and not ("\u4e00" <= ch <= "\u9fff")
+    )
+    return symbols / len(text) <= 0.3
+
+
 def _level_of(x: float, centers: list[float], body: float) -> int:
     for idx, center in enumerate(centers):
         if abs(x - center) <= body * 0.8:
@@ -357,6 +431,9 @@ def _clean_list_text(text: str) -> str:
 def build_document(pdf_path: str | Path) -> Document:
     doc = pymupdf.open(str(pdf_path))
     lines = extract_lines(doc)
+    # 旋转文字（侧边水印、竖排标签）坐标系与正文不同，短行直接丢弃；
+    # 长段竖排保留，宁可顺序乱也别丢内容
+    lines = [ln for ln in lines if not (ln.rotated and len(ln.text) < 80)]
     if not lines:
         raise ValueError("没有提取到任何文本行")
 
@@ -430,6 +507,7 @@ def build_document(pdf_path: str | Path) -> Document:
             para_gap = base_gap + body * 0.6 if small else body * 1.6
             i = 0
             warned_here = False
+            suspicious_run = 0
             while i < len(rows):
                 row = rows[i]
 
@@ -458,10 +536,20 @@ def build_document(pdf_path: str | Path) -> Document:
                 if len(row) > 1:
                     # 多格行但不成表：拼起来，绝不丢单元格
                     flush_all()
-                    if _is_short_cell_row(row) and not warned_here:
-                        # 静默降级比报错更糟：这里是"看起来像表格却没成形"
-                        ir.add(Block("warning", text="疑似表格未能识别，下方内容可能需要人工整理"))
-                        warned_here = True
+                    joined = _row_text(row)
+                    if all(ln.bold for ln in row) and _is_phrase_heading(joined):
+                        m = SECTION_NUM.match(joined)
+                        lvl = min(1 + m.group(1).count("."), 3) if m else 2
+                        ir.add(Block("heading", text=joined, level=lvl, page=pno, **_geo(row)))
+                        i += 1
+                        continue
+                    if _is_short_cell_row(row) and all(_is_wordy_cell(ln.text) for ln in row):
+                        suspicious_run += 1
+                        if suspicious_run >= 1 and not warned_here:
+                            ir.add(Block("warning", text="疑似表格未能识别，下方内容可能需要人工整理"))
+                            warned_here = True
+                    else:
+                        suspicious_run = 0
                     ir.add(Block("paragraph", text=_row_text(row), page=pno, **_geo(row)))
                     i += 1
                     continue
@@ -485,4 +573,12 @@ def build_document(pdf_path: str | Path) -> Document:
                     ir.add(Block(kind, text=text, level=level, page=pno, **_geo([ln])))
             flush_all()
     flush()
+
+    # 整篇兜底：短碎片过多，说明结构很可能没重建对（表格散架、分栏切错）
+    short = [b for b in ir.blocks if b.kind == "paragraph" and len(b.text) <= 12]
+    if len(short) >= 4:
+        ir.blocks.insert(
+            0,
+            Block("warning", text=f"有 {len(short)} 处短碎片，疑似表格或分栏未能正确识别，建议人工核对"),
+        )
     return ir

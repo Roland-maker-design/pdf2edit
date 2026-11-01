@@ -21,6 +21,12 @@ class Line:
     page_height: float
     page_width: float
     raw: str = ""                        # 原始文本，保留行首缩进（代码块需要）
+    direction: tuple[float, float] = (1.0, 0.0)   # 书写方向；非水平即旋转文字
+
+    @property
+    def rotated(self) -> bool:
+        """竖排/侧边水印这类旋转文字。"""
+        return abs(self.direction[1]) > 0.1
 
 
 def extract_lines(doc: pymupdf.Document) -> list[Line]:
@@ -54,6 +60,7 @@ def extract_lines(doc: pymupdf.Document) -> list[Line]:
                         page_height=page.rect.height,
                         page_width=page.rect.width,
                         raw=text.rstrip("\n"),
+                        direction=tuple(line.get("dir", (1.0, 0.0))),  # type: ignore[arg-type]
                     )
                 )
     return lines

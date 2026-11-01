@@ -16,3 +16,6 @@ Thumbs.db
 # 本地实验（不提交）
 scratch/
 *.local.*
+
+# 第三方真实样本（不提交）
+fixtures/real/
