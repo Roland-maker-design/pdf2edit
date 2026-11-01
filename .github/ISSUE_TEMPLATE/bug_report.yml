@@ -1,0 +1,99 @@
+name: 报告一个问题
+description: 转换结果不对、程序崩溃、或者跟说明不符
+title: "[问题] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先花十秒确认一下：**它是不是 [已知限制](https://github.com/Roland-maker-design/pdf2edit#已知限制)？**
+        图片丢失、公式不转、合并单元格、单元格内换行、旋转文字顺序——这些是明确不做的，不按 bug 处理。
+
+        另外请**不要**上传合同、身份证、票据、体检报告之类的文件。贴样本前请先删掉敏感内容。
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: Release 页面上的版本号，或者你 clone 时的 commit
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 系统
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: entry
+    attributes:
+      label: 怎么用的
+      options:
+        - Releases 下载的 exe，双击打开窗口
+        - 源码 python -m pdf2edit --window
+        - 源码 python -m pdf2edit --ui（网页界面）
+        - 源码命令行 python -m pdf2edit
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: formats
+    attributes:
+      label: 勾了哪些输出格式
+      options:
+        - label: Markdown
+        - label: Word (docx)
+        - label: HTML
+        - label: PowerPoint (pptx)
+        - label: Excel (xlsx)
+
+  - type: textarea
+    id: source
+    attributes:
+      label: PDF 是怎么来的
+      description: 只要能说清来源类型就行，不用贴内容。例如：Word 另存的 PDF、Chrome 打印成 PDF、LaTeX 生成的论文、学校发的通知
+      placeholder: Word 2019 另存为 PDF，正文 + 一个三列表格
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 越具体越好。哪个标题层级错了、哪一列串行了、哪里多了 ⚠️ 标记
+    validations:
+      required: true
+
+  - type: textarea
+    id: expect
+    attributes:
+      label: 你期望它变成什么样
+      description: 一句话也行。
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 报错信息
+      description: 命令行或窗口里显示的原文，直接粘，不用整理。
+      render: text
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我贴的内容里没有任何隐私信息（合同、身份证、票据、医疗记录等）
+          required: true
+        - label: 我已经看过「已知限制」，这不是其中一条
+          required: true

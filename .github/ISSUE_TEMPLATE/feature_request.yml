@@ -1,0 +1,33 @@
+name: 想要个新功能
+description: 希望它支持某种格式、某种排版、或者更省事的用法
+title: "[需求] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        说清楚**你现在是怎么将就的**，比说"希望支持 X"有用得多——
+        知道你在拿什么替代，才知道值不值得做。
+
+  - type: textarea
+    id: pain
+    attributes:
+      label: 你现在遇到的具体麻烦
+      description: 举个真实例子：那是什么文档，你必须手动干什么
+      placeholder: 每次拿到 PDF 论文，目录都得自己重新敲一遍
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 你现在怎么绕过
+      description: 有没有别的工具、手工活、或者干脆放弃了
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望它怎么做
+      description: 一句话就行，不用设计实现方案。

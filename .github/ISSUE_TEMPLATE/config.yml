@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 先看「已知限制」——大概率这里已经有答案
+    url: https://github.com/Roland-maker-design/pdf2edit#已知限制
+    about: 图片一律丢失、公式不转 LaTeX、合并单元格不支持、单元格内换行会散架、旋转文字顺序可能错乱
+  - name: macOS / Linux 怎么用
+    url: https://github.com/Roland-maker-design/pdf2edit#从源码跑
+    about: 没有现成 exe，按 README 的「从源码跑」安装依赖即可；两个平台的现状是"能跑但未实测"
