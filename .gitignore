@@ -19,3 +19,8 @@ scratch/
 
 # 第三方真实样本（不提交）
 fixtures/real/
+
+# 构建产物
+build/
+dist/
+*.spec
