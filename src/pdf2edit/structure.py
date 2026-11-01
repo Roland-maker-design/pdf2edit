@@ -574,6 +574,19 @@ def build_document(pdf_path: str | Path) -> Document:
             flush_all()
     flush()
 
+    # 有图没字的页，多半是扫描页——内容会整页丢失，必须说出来
+    with_text = {b.page for b in ir.blocks if b.page}
+    image_only = [
+        pn for pn in range(1, doc.page_count + 1)
+        if pn not in with_text and doc[pn - 1].get_images()
+    ]
+    if image_only:
+        names = "、".join(str(n) for n in image_only)
+        ir.blocks.insert(
+            0,
+            Block("warning", text=f"第 {names} 页只有图片没有文字层（疑似扫描页），这部分内容未被转换"),
+        )
+
     # 整篇兜底：短碎片过多，说明结构很可能没重建对（表格散架、分栏切错）
     short = [b for b in ir.blocks if b.kind == "paragraph" and len(b.text) <= 12]
     if len(short) >= 4:

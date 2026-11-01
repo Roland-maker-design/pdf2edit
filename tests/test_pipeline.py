@@ -583,6 +583,31 @@ def test_non_pdf_is_rejected_not_crashed(tmp_path: Path) -> None:
     assert "有效的 PDF" in result["reason"]
 
 
+def test_image_only_page_emits_warning(tmp_path: Path) -> None:
+    """扫描页没有文字层时必须报出来，不能整页静默消失。"""
+    pdf = EDGE / "g2_mixed_scan.pdf"
+    if not pdf.exists():
+        pytest.skip("缺少 g2_mixed_scan.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(pdf, tmp_path, ["md"])
+    text = result["files"][0].read_text(encoding="utf-8")
+    assert "只有图片没有文字层" in text, text[:200]
+    assert result["warnings"] >= 1
+
+
+def test_blank_page_does_not_warn(tmp_path: Path) -> None:
+    """纯空白页不该报警——它是真的空，不是丢了内容。"""
+    pdf = EDGE / "b3_blank_middle.pdf"
+    if not pdf.exists():
+        pytest.skip("缺少 b3_blank_middle.pdf")
+    from pdf2edit.convert import convert_file
+
+    result = convert_file(pdf, tmp_path, ["md"])
+    text = result["files"][0].read_text(encoding="utf-8")
+    assert "只有图片" not in text
+
+
 def test_list_levels_preserved(tmp_path: Path) -> None:
     """四级列表要保留层级，且不能残留项目符号字符。"""
     pdf = EDGE / "f1_deep_list.pdf"

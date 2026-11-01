@@ -308,6 +308,61 @@ def f3_vertical_text(out: Path) -> None:
     doc.save(str(out))
 
 
+
+def g1_gov_document(out: Path) -> None:
+    """中文公文样式：居中标红标题、仿宋正文、首行缩进、右下落款、页脚页码。"""
+    doc = pymupdf.open()
+    p = doc.new_page()                      # A4
+    width = 595.0
+
+    # 标题：居中、二号字、红色（公文标准是红色小标宋）
+    title = "关于加强文档转换质量管理的通知"
+    tw = len(title) * 16 * 0.6
+    p.insert_text(((width - tw) / 2, 120), title, fontsize=16, fontname=CJK,
+                  color=(0.8, 0.05, 0.05))
+
+    p.insert_text((470, 150), "文档字〔2026〕7 号", fontsize=10, fontname=CJK)
+
+    y = 190.0
+    body = [
+        "各部门、各单位：",
+        "为提升电子文档的转换质量，现就有关事项通知如下。",
+        "一、明确责任。各部门应当指定专人负责文档的归档与转换，确保来源可靠、格式规范。",
+        "二、规范流程。转换前须核验文档是否为电子版原件，扫描件、翻拍件不得作为归档底稿。",
+        "三、加强检查。每季度开展一次抽查，对转换质量不合格的单位予以通报。",
+    ]
+    for line in body:
+        p.insert_text((60, y), line, fontsize=12, fontname=CJK)
+        y += 26
+
+    p.insert_text((430, 380), "文档管理办公室", fontsize=12, fontname=CJK)
+    p.insert_text((420, 404), "2026 年 11 月 1 日", fontsize=12, fontname=CJK)
+
+    p.insert_text((250, 800), "— 1 —", fontsize=10, fontname=CJK)
+    doc.save(str(out))
+
+
+def g2_mixed_scan(out: Path) -> None:
+    """混合型：3 页文字 + 1 页纯图片（模拟扫描页）。"""
+    doc = pymupdf.open()
+    for i in range(1, 4):
+        p = doc.new_page()
+        p.insert_text((60, 80), f"第 {i} 节", fontsize=16, fontname=CJK)
+        for j in range(8):
+            p.insert_text((60, 120 + j * 18),
+                          f"第 {i} 页正文第 {j + 1} 行，本节共八行文字，用于占位。",
+                          fontsize=11, fontname=CJK)
+
+    # 第 3 页做成纯图片（扫描页），没有任何文字层
+    scanned = doc.new_page()
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 400, 560), 0)
+    pix.set_rect(pix.irect, (235, 235, 235))
+    for row in range(10):
+        pix.set_rect(pymupdf.IRect(30, 40 + row * 50, 370, 46 + row * 50), (60, 60, 60))
+    scanned.insert_image(pymupdf.Rect(60, 80, 460, 640), pixmap=pix)
+
+    doc.save(str(out))
+
 def d1_corrupt(out: Path) -> None:
     doc = pymupdf.open()
     p = _page(doc)
@@ -346,6 +401,8 @@ def main() -> None:
         "f1_deep_list": f1_deep_list,
         "f2_multilang": f2_multilang,
         "f3_vertical_text": f3_vertical_text,
+        "g1_gov_document": g1_gov_document,
+        "g2_mixed_scan": g2_mixed_scan,
         "d1_corrupt": d1_corrupt,
         "d2_not_pdf": d2_not_pdf,
     }
