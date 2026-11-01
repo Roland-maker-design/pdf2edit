@@ -1,8 +1,14 @@
 首个可用版本。
 
+## 注意：系统限制
+
+只在 **Windows 11（64 位）** 上实测过。Windows 10 大概能跑但没测；macOS / Linux 没有现成 exe，可以跑源码，也未实测。
+
+遇到问题请开 [Issue](https://github.com/Roland-maker-design/pdf2edit/issues)，别发邮件——Issue 能被别人搜到，也能留下来。
+
 ## 下载
 
-`pdf2edit.exe`（约 89 MB）。Windows 10 / 11（64 位）双击即用——不用装 Python，不用命令行，不联网。
+`pdf2edit.exe`（约 89 MB）。Windows 11（64 位）双击即用——不用装 Python，不用命令行，不联网。
 
 首次启动要把依赖解压到临时目录，可能白屏 3–8 秒，属正常，别重复双击。
 

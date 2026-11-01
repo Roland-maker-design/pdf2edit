@@ -19,7 +19,11 @@
 
 ## 系统要求
 
-Windows 10 / 11（64 位）。macOS、Linux 请跑源码，见「从源码跑」。
+**实测环境只有 Windows 11（64 位）。** Windows 10 大概率能跑，但没测过，不敢打包票。
+
+macOS / Linux 没有现成的 exe，可以按「从源码跑」直接运行，依赖都是跨平台的——同样没实测。
+
+遇到系统相关的问题，请开 [Issue](https://github.com/Roland-maker-design/pdf2edit/issues)，比发邮件更容易被找回来。
 
 ## 支持
 
