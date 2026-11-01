@@ -19,7 +19,7 @@
 
 ## 系统要求
 
-Windows 10 / 11（64 位）。macOS、Linux 请跑源码，见文末「开发」。
+Windows 10 / 11（64 位）。macOS、Linux 请跑源码，见「从源码跑」。
 
 ## 支持
 
@@ -94,12 +94,20 @@ fixtures/       测试样本（含真实来源：Word 导出、浏览器打印�
 tools/          辅助脚本
 ```
 
-## 开发
+## 从源码跑
 
 ```bash
-python -m pip install pymupdf fonttools python-docx python-pptx openpyxl flask pyside6 pytest
-python -m pytest tests -q
+git clone https://github.com/Roland-maker-design/pdf2edit.git
+cd pdf2edit
+python -m pip install -r requirements-dev.txt   # 运行时 + 测试 + 打包，版本已锁
+python -m pytest tests -q                       # 62 个测试
+python -m pdf2edit --window                     # 桌面窗口
+python -m pdf2edit 输入.pdf --to docx            # 命令行
 ```
+
+只想用命令行或网页界面的话，装 `requirements.txt` 就够了（不含 PySide6，省 100 多 MB）。
+
+macOS / Linux 没有现成的单文件 exe，直接这样跑源码即可，依赖都是跨平台的。
 
 ## 验证过什么
 
